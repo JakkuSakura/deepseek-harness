@@ -50,7 +50,7 @@ interface SessionStatsTotals {
   /** Provider output tokens over the same steps. */
   decodeTokens: number
   /** The recorded steps those two figures are summed from, oldest first. */
-  decodeSteps: readonly DecodeStep[]
+  decodeSteps: DecodeStep[]
 }
 
 /** One step's decode contribution, kept so it can age out of the window. */
