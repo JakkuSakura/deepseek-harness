@@ -1,0 +1,35 @@
+# dsh-plugin-git-tree bundle layer.
+#
+# The first entry inserts this package's own row. The package also declares
+# `dsh.client`, so that row's browser bundle is served from /plugins and mounted
+# as the sidebar panel. Config keys are deliberately absent: the Host half
+# validates its own bounds as module constants, so the row needs no schemastery
+# descriptor.
+#
+# A bundle layer is applied after `@deepseek-ai/dsh-base` and
+# `@deepseek-ai/dsh-web-app` and before the profile's own `cordis.patch.yml`, so
+# the second entry below outranks the shipped roster and can still be overridden
+# by hand in the profile.
+
+- insert:
+    - id: git-tree
+      name: 'dsh-plugin-git-tree'
+
+# Hide the sidebar's Plugins row.
+#
+# `ui-plugin-manager` registers a `sidebar.panellist` row plus the `main` panel it
+# opens, and it is the only *interactive* plugin surface: Settings → Plugins
+# carries just the read-only inventory (`ui-settings-plugin-inventory`). Turning
+# the row off therefore leaves the read-only list in Settings as the only plugin
+# view, and installing, enabling or removing a bundle goes back to being a profile
+# edit.
+#
+# This is a deliberate product choice for this profile, not a side effect of the
+# git panel. To bring the page back without dropping the panel, override it in the
+# profile's own `cordis.patch.yml` — that layer is applied last, so `disabled:
+# false` there wins:
+#
+#   - id: ui-plugin-manager
+#     disabled: false
+- id: ui-plugin-manager
+  disabled: true
