@@ -110,6 +110,15 @@ const sessionStatsStateSchema = sessionStatsSchema.extend({
     firstTokenTime: z.number().nonnegative().nullable(),
   }).nullable(),
   pendingCalls: z.record(z.string(), z.number().nonnegative()),
+  // The window's record. It belongs to the state rather than the view: the view reports
+  // the two figures, and this is what they are summed from. Defaulted so a cache row
+  // written before the window existed loads as an empty window — which is what it is,
+  // since no step in it can be older than the window and still count.
+  decodeSteps: z.array(z.object({
+    time: z.number().nonnegative(),
+    ms: z.number().nonnegative(),
+    tokens: z.number().nonnegative(),
+  })).default([]),
 })
 
 /**
