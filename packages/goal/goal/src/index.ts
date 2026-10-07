@@ -373,9 +373,16 @@ export class GoalService extends TypertRemoteService {
       throw new GoalError(`goal "${current.id}" is already active and armed`, 'GOAL_INVALID_TRANSITION')
     }
     if (currentState.roundsStarted >= current.maxGoalRounds) {
-      throw new GoalError(
-        `goal "${current.id}" exhausted ${current.maxGoalRounds} goal rounds; increase maxGoalRounds before resuming`,
-        'GOAL_INVALID_TRANSITION',
+      // An exhausted budget is a human decision, not a dead end. Nothing in the UI edits
+      // `maxGoalRounds`, so refusing here left the goal unresumable with advice the reader
+      // had no way to act on. The budget moves; the counter does not.
+      return this.commitCurrent(
+        agent,
+        currentState,
+        runtime,
+        'resume',
+        { ...this.withPhase(current, 'active'), maxGoalRounds: current.maxGoalRounds + RESUME_ROUND_GRANT },
+        'armed',
       )
     }
     return this.commitCurrent(agent, currentState, runtime, 'resume', this.withPhase(current, 'active'), 'armed')
