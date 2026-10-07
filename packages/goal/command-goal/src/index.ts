@@ -142,11 +142,16 @@ function executeGoalCommand(ctx: Context, invocation: CommandInvocation): Comman
       case 'removed':
         return { kind: 'error', text: `Goal objectives cannot be edited. ${USAGE}` }
       case 'create': {
+        // An objective always wins. A goal that is still there is cleared and replaced
+        // rather than refused: the refusal made the reader run `/goal clear` first to get
+        // exactly this, and it appeared in the phases where a replacement matters most.
+        // Clearing has no phase guard, where `edit` would keep the old phase and its
+        // spent rounds — a replaced objective would arrive blocked, with no budget.
         if (current !== undefined && current.phase !== 'complete') {
-          return {
-            kind: 'error',
-            text: `A goal is already ${phaseLabel(current.phase)}. Use /goal clear before replacing it.`,
-          }
+          ctx.goals.clear(invocation.agent, goalRef(current))
+          const replaced = ctx.goals.create(invocation.agent, { objective: command.objective })
+          submitObjectiveAttachments(invocation)
+          return renderGoal('Goal replaced', replaced)
         }
         const created = ctx.goals.create(invocation.agent, { objective: command.objective })
         submitObjectiveAttachments(invocation)
