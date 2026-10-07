@@ -1,0 +1,6 @@
+node_modules/
+*.log
+.DS_Store
+
+# `lib/` is deliberately NOT ignored: it holds the built artifacts the profile
+# installs, so a checkout is installable without a build step.

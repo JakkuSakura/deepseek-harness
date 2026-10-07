@@ -1,0 +1,19 @@
+# dsh-plugin-push bundle layer.
+#
+# A bundle layer is applied after `@deepseek-ai/dsh-base` and
+# `@deepseek-ai/dsh-web-app` and before the profile's own `cordis.patch.yml`, so the
+# profile can still override anything here by hand.
+#
+# The row is *inserted*, not patched: `- id: push` alone is read as a patch against a
+# row that does not exist yet, and DSH answers `patch: entry "push" not found` on
+# stderr while composing without it — a plugin that silently is not there.
+
+- insert:
+    - id: push
+      name: 'dsh-plugin-push'
+      config:
+        # Where the server's push identity and the subscriptions live.
+        # Empty means $DSH_HOME/push.
+        dataDir: ''
+        # A mailto: or https:// contact, as the push services require of VAPID.
+        subject: 'mailto:qjk2001@gmail.com'
