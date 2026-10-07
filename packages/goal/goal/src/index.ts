@@ -47,6 +47,9 @@ import type {
   GoalSnapshotChangeMeta,
 } from './domain.ts'
 
+/** Rounds granted when a human resumes a goal that has spent its budget. */
+const RESUME_ROUND_GRANT = 256
+
 // The pure payload outlet (./types.ts, ONE home of the `goal` projection-key
 // declaration) re-exported onto the package root keeps the module edge in
 // the emitted index.d.ts, so aggregate programs consuming the declarations
