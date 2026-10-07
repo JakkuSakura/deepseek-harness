@@ -198,23 +198,18 @@ describe('sessionStats wall-time fold (controlled timestamps)', () => {
   }
 
   it('drops decode figures once they age out, rather than averaging a whole Session', () => {
-    const at = (time: number, type: string, data: object) => ({ type, time, data })
-    const message = (time: number, tokens: number) => ({
-      type: 'assistant/message',
-      time,
-      data: {
-        turn: 1,
-        step: 1,
-        usage: { inputTokens: 1, outputTokens: tokens },
-        stream: [{ time: time - 20, chunk: { type: 'text-delta', index: 0, text: 'a' } }],
-      },
-    })
-    // A step at 12s, then one 40s later: only the recent one is inside the window.
+    // Two steps 40 seconds apart, each with its own first token. At the second message only
+    // the recent step is inside the window, so the figure is that step's tokens alone —
+    // where the whole-log sum would have read 67.
     const value = fold([
       at(10_000, 'step/start', { turn: 1, step: 1 }),
-      message(12_000, 60),
+      messageAt(12_000, [{ time: 11_980, chunk: { type: 'text-delta', index: 0, text: 'a' } }], {
+        inputTokens: 1, outputTokens: 60,
+      }),
       at(50_000, 'step/start', { turn: 1, step: 1 }),
-      message(52_000, 7),
+      messageAt(52_000, [{ time: 51_980, chunk: { type: 'text-delta', index: 0, text: 'a' } }], {
+        inputTokens: 1, outputTokens: 7,
+      }),
     ])
     expect(value.decodeTokens).toBe(7)
   })
