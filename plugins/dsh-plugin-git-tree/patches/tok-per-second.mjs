@@ -14,6 +14,19 @@
  * than the window are dropped, and the two scalars become their sum. The figure
  * therefore freezes at its last value once a turn stops, because a projection is
  * only re-published when the log grows.
+ *
+ * Three details are load-bearing, and the first two were wrong in the first version
+ * of this patch:
+ *
+ * - The window is a **new array**, never a `push`. `next` is spread from `state`, so
+ *   they share the array; pushing into it mutates the state the projection is still
+ *   holding and compares by identity.
+ * - The state schema is `strict` and validates persisted-cache rows. A row carrying
+ *   the window must be declared, or it is rejected — and a row parsed through the
+ *   schema would come back without the field, leaving the fold to spread `undefined`.
+ * - The anchor for the initial state spans two lines so it is not a prefix of its own
+ *   replacement: a find string like that matches after being applied, which is how a
+ *   copy got patched twice.
  */
 export default {
   id: 'tok-per-second',
@@ -22,25 +35,16 @@ export default {
   file: 'lib/index.js',
   replacements: [
     {
-      // The fold's initial state gains the window's contents. The anchor spans two
-      // lines so that it is not a prefix of its own replacement: a find string like
-      // that matches after being applied, which is how a copy got patched twice.
       find: '\t\tdecodeMs: 0,\n\t\tdecodeTokens: 0,',
       replace: '\t\tdecodeMs: 0,\n\t\tdecodeSteps: [],\n\t\tdecodeTokens: 0,',
     },
     {
-      // Each finished step is kept, the window is applied, and the scalars follow it.
-      find: `\t\t\t\t\t\tnext.decodeMs += Math.max(0, event.time - firstToken);
-\t\t\t\t\t\tnext.decodeTokens += outputTokens;`,
-      replace: `\t\t\t\t\t\tnext.decodeSteps.push({
-\t\t\t\t\t\t\ttime: event.time,
-\t\t\t\t\t\t\tms: Math.max(0, event.time - firstToken),
-\t\t\t\t\t\t\ttokens: outputTokens
-\t\t\t\t\t\t});
-\t\t\t\t\t\tconst windowStart = event.time - 15000;
-\t\t\t\t\t\tnext.decodeSteps = next.decodeSteps.filter((step) => step.time >= windowStart);
-\t\t\t\t\t\tnext.decodeMs = next.decodeSteps.reduce((total, step) => total + step.ms, 0);
-\t\t\t\t\t\tnext.decodeTokens = next.decodeSteps.reduce((total, step) => total + step.tokens, 0);`,
+      find: '\t\t\t\t\t\tnext.decodeMs += Math.max(0, event.time - firstToken);\n\t\t\t\t\t\tnext.decodeTokens += outputTokens;',
+      replace: '\t\t\t\t\t\t// A new array, never a push: `next` shares its array with the state it was\n\t\t\t\t\t\t// spread from, and the projection compares states by identity.\n\t\t\t\t\t\tnext.decodeSteps = [...next.decodeSteps, {\n\t\t\t\t\t\t\ttime: event.time,\n\t\t\t\t\t\t\tms: Math.max(0, event.time - firstToken),\n\t\t\t\t\t\t\ttokens: outputTokens\n\t\t\t\t\t\t}].filter((step) => step.time >= event.time - 15000);\n\t\t\t\t\t\tnext.decodeMs = next.decodeSteps.reduce((total, step) => total + step.ms, 0);\n\t\t\t\t\t\tnext.decodeTokens = next.decodeSteps.reduce((total, step) => total + step.tokens, 0);',
+    },
+    {
+      find: '\tpendingCalls: z.record(z.string(), z.number().nonnegative())\n});',
+      replace: '\tpendingCalls: z.record(z.string(), z.number().nonnegative()),\n\tdecodeSteps: z.array(z.object({\n\t\ttime: z.number().nonnegative(),\n\t\tms: z.number().nonnegative(),\n\t\ttokens: z.number().nonnegative()\n\t})).default([])\n});',
     },
   ],
 }
