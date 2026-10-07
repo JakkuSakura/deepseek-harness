@@ -184,7 +184,13 @@ function goalSource(source: MessageSource): GoalMessageSource | undefined {
 
 /** Require two snapshots to retain fields that only `edit` may replace. */
 function requireSameDefinition(current: GoalSnapshot, next: GoalSnapshot, operation: GoalOperation): void {
-  if (next.objective !== current.objective || next.maxGoalRounds !== current.maxGoalRounds) {
+  // A resume may raise the round budget and never lower it. An exhausted goal is
+  // resumable by a human decision, and the budget is the only thing that can move: the
+  // counter is what the round numbering validates against — a round is admitted only
+  // when `source.round === roundsStarted + 1` — so resetting it would arm the goal and
+  // then reject its next round.
+  const raisingOnResume = operation === 'resume' && next.maxGoalRounds > current.maxGoalRounds
+  if (next.objective !== current.objective || (next.maxGoalRounds !== current.maxGoalRounds && !raisingOnResume)) {
     throw new Error(`goal ${operation} cannot change objective or maxGoalRounds`)
   }
 }

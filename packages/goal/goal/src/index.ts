@@ -47,6 +47,9 @@ import type {
   GoalSnapshotChangeMeta,
 } from './domain.ts'
 
+/** Rounds granted when a human resumes a goal that has spent its budget. */
+const RESUME_ROUND_GRANT = 256
+
 // The pure payload outlet (./types.ts, ONE home of the `goal` projection-key
 // declaration) re-exported onto the package root keeps the module edge in
 // the emitted index.d.ts, so aggregate programs consuming the declarations
@@ -373,9 +376,17 @@ export class GoalService extends TypertRemoteService {
       throw new GoalError(`goal "${current.id}" is already active and armed`, 'GOAL_INVALID_TRANSITION')
     }
     if (currentState.roundsStarted >= current.maxGoalRounds) {
-      throw new GoalError(
-        `goal "${current.id}" exhausted ${current.maxGoalRounds} goal rounds; increase maxGoalRounds before resuming`,
-        'GOAL_INVALID_TRANSITION',
+      // An exhausted budget is a human decision, not a dead end. Nothing in the UI edits
+      // `maxGoalRounds`, so refusing here left the goal unresumable with advice the
+      // reader had no way to act on. The budget moves; the counter does not — a round is
+      // admitted only when its number is `roundsStarted + 1`.
+      return this.commitCurrent(
+        agent,
+        currentState,
+        runtime,
+        'resume',
+        { ...this.withPhase(current, 'active'), maxGoalRounds: current.maxGoalRounds + RESUME_ROUND_GRANT },
+        'armed',
       )
     }
     return this.commitCurrent(agent, currentState, runtime, 'resume', this.withPhase(current, 'active'), 'armed')
