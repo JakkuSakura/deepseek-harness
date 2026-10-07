@@ -383,7 +383,7 @@ describe('GoalService mutations', () => {
     }))
   })
 
-  it('records canonical blocker reasons and enforces the round cap on resume', async () => {
+  it('records canonical blocker reasons, and resuming an exhausted goal grants rounds', async () => {
     const { ctx, agent, session } = await harness()
     let goal = ctx.goals.create(agent, { objective: 'bounded', maxGoalRounds: 2 })
     for (const reason of [null, [], { code: 1, message: 'invalid code' }, { code: 'round-limit', message: 1 }]) {
@@ -407,11 +407,13 @@ describe('GoalService mutations', () => {
       roundsStarted: 2,
       activation: 'disarmed',
     })
-    expect(() => ctx.goals.resume(agent, goal)).toThrow(expect.objectContaining({ code: 'GOAL_INVALID_TRANSITION' }))
-    goal = ctx.goals.edit(agent, goal, { maxGoalRounds: 3 })
-    expect(goal.blockedReason).toEqual({ code: 'round-limit', message: 'Goal round limit reached.' })
+    // An exhausted budget is a human decision, not a dead end. Refusing here asked for
+    // something the reader could not do: nothing in the UI edits `maxGoalRounds`, and
+    // `resume` was itself forbidden from changing it. The budget moves; the counter does
+    // not, because a round is admitted only when its number is `roundsStarted + 1`.
+    expect(goal.roundsStarted).toBe(2)
     goal = ctx.goals.resume(agent, goal)
-    expect(goal).toMatchObject({ phase: 'active', maxGoalRounds: 3, activation: 'armed' })
+    expect(goal).toMatchObject({ phase: 'active', maxGoalRounds: 2 + 256, activation: 'armed' })
     expect(goal.blockedReason).toBeUndefined()
     appendRound(session, goal, 3)
     goal = ctx.goals.block(agent, goal, { code: 'round-limit', message: 'Goal round limit reached.' })
