@@ -135,6 +135,8 @@ await build({
     'client-workspacepanels': 'src/client/workspacepanels.ts',
     'client-autohistory': 'src/client/autohistory.ts',
     'client-expandall': 'src/client/expandall.ts',
+    'client-drafts': 'src/client/drafts.ts',
+    'client-draftwatch': 'src/client/draftwatch.ts',
     'client-sessions': 'src/client/sessions.ts',
   },
   outdir: 'lib/testing',

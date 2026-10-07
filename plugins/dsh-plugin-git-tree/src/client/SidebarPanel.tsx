@@ -23,6 +23,8 @@ import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-sess
 import type { GitStatsResponse } from '../wire.ts'
 import { buildChangeIndex, changeFolders, childPath } from './changes.ts'
 import { FilesView } from './FilesView.tsx'
+import { installDraftWatch } from './draftwatch.ts'
+import { rememberDraft } from './drafts.ts'
 import { groupSessions } from './sessions.ts'
 import type { DropAction } from './sessions.ts'
 import { SessionsView } from './SessionsView.tsx'
@@ -147,6 +149,22 @@ export function GitSidebar(props: GitSidebarProps): ReactNode {
   const liveSignal = useLiveSignal()
   // Two primitive selections, so neither subscription churns on a new object.
   const sessionId = useSessions(sessions => currentSession(sessions)?.id)
+  // Unsent input, per Session. The composer is the only surface that holds it and the
+  // active Session is the only one whose composer is mounted, so the mapping lives here,
+  // where both are known. The memory is this page's, so a reload forgets which Sessions
+  // had drafts until their composers are typed in again.
+  const activeIdRef = useRef(sessionId)
+  activeIdRef.current = sessionId
+  const [drafts, setDrafts] = useState<ReadonlySet<string>>(() => new Set<string>())
+  const draftMemory = useRef<ReadonlyMap<string, string>>(new Map<string, string>())
+  useEffect(() => installDraftWatch(document, (text) => {
+    const active = activeIdRef.current
+    if (active === undefined) return
+    const key = String(active)
+    if ((draftMemory.current.get(key) ?? '') === text) return
+    draftMemory.current = rememberDraft(draftMemory.current, key, text)
+    setDrafts(new Set(draftMemory.current.keys()))
+  }), [])
   const cwd = useSessions(sessions => currentSession(sessions)?.cwd) ?? ''
   // Snapshot references are stable between changes, so these select the whole
   // collection without churning: both stores republish only on a real mutation.
@@ -173,8 +191,9 @@ export function GitSidebar(props: GitSidebarProps): ReactNode {
       archived: workspaceViews.archivedSessionIds,
       activeId: sessionId,
       statuses,
+      drafts,
     }),
-    [workspaceViews, sessionRows, sessionId, statuses],
+    [workspaceViews, sessionRows, sessionId, statuses, drafts],
   )
 
   const [tab, setTab] = useState<PanelTab>('sessions')
