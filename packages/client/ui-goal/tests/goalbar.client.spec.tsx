@@ -188,11 +188,36 @@ describe('GoalBar', () => {
     expect(screen.getByText('受阻的目标').closest('[title]')?.getAttribute('title')).toBe('No progress in 3 rounds')
   })
 
+  it('blocked goal: a resume action, because the service accepts one', () => {
+    const actions = makeActions()
+    const goal = makeGoal({ phase: 'blocked', blockedReason: { code: 'stalled', message: 'No progress' } })
+    render(<GoalBar goal={goal} {...actions} t={t} />)
+    fireEvent.click(screen.getByRole('button', { name: '恢复目标' }))
+    expect(actions.onResume).toHaveBeenCalledTimes(1)
+    // And it must not offer to pause something that is not running.
+    expect(screen.queryByRole('button', { name: '暂停目标' })).toBeNull()
+  })
+
   it('blocked goal without a reason carries no tooltip', () => {
     const actions = makeActions()
     render(<GoalBar goal={makeGoal({ phase: 'blocked' })} {...actions} t={t} />)
     expect(screen.getByText('受阻的目标')).toBeTruthy()
     expect(screen.getByText('受阻的目标').closest('[title]')).toBeNull()
+  })
+
+  it('edits an objective in a multi-line box, where Enter saves and Shift+Enter breaks', () => {
+    const actions = makeActions()
+    render(<GoalBar goal={makeGoal()} {...actions} t={t} />)
+    fireEvent.click(screen.getByRole('button', { name: '编辑目标' }))
+    const editor = screen.getByRole('textbox', { name: '目标内容' })
+    // An `input` renders a one-line box that showed only the first line of an objective.
+    expect(editor.tagName).toBe('TEXTAREA')
+    expect(editor.getAttribute('rows')).toBe('3')
+    // Enter saves; a plain Enter must not be the only key that does something.
+    fireEvent.keyDown(editor, { key: 'Enter', shiftKey: true })
+    expect(actions.onEdit).not.toHaveBeenCalled()
+    fireEvent.keyDown(editor, { key: 'Enter' })
+    expect(actions.onEdit).toHaveBeenCalledTimes(1)
   })
 
   it('keeps the edit draft open and reports a failed save', async () => {

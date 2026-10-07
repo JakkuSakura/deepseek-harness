@@ -88,8 +88,12 @@
 .objectiveInput {
   flex: 1;
   min-width: 0;
-  height: 26px;
-  padding: 0 8px;
+  /* min-height rather than height, so the box grows with the objective, and
+     border-box so the padding does not add to it. */
+  min-height: 26px;
+  box-sizing: border-box;
+  resize: vertical;
+  padding: 4px 8px;
   border: 0.5px solid var(--dsw-alias-border-l4);
   border-radius: var(--dsw-radius-sm);
   background: var(--dsw-alias-bg-base);

@@ -89,14 +89,21 @@ export function GoalBar({ goal, activation, onEdit, onPause, onResume, onClear, 
     return (
       <div className={css.dock} data-goal-bar>
         <div className={css.bar}>
-          <input
+          {/* A textarea, not an input: an objective is prose, and a one-line box showed
+              only its first line. Enter saves and Shift+Enter breaks the line — with a
+              plain `input` every Enter saved, so a multi-line objective could not be
+              typed at all. */}
+          <textarea
             className={css.objectiveInput}
-            type="text"
+            rows={3}
             aria-label={t('objective.aria')}
             value={draft}
             onChange={(e) => { setDraft(e.target.value) }}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') void handleEdit()
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                void handleEdit()
+              }
               if (e.key === 'Escape') setEditing(false)
             }}
             autoFocus
@@ -133,7 +140,11 @@ export function GoalBar({ goal, activation, onEdit, onPause, onResume, onClear, 
 
   const title = goal.phase === 'blocked' ? goal.blockedReason?.message : undefined
   const label = goal.phase === 'active' ? activeLabel(activation, t) : t(PHASE_LABELS[goal.phase])
+  // A blocked goal is resumable: the service lists `blocked` among the phases a resume
+  // may come from, so offering the action is the honest thing — the only state a reader
+  // most needs a way out of was the one with no way out.
   const showResume = goal.phase === 'paused'
+    || goal.phase === 'blocked'
     || (goal.phase === 'active' && activation === 'disarmed')
   return (
     <div className={css.dock} data-goal-bar>
