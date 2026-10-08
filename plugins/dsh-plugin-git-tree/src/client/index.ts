@@ -37,7 +37,7 @@ import {
   GIT_DIFF_PROTOCOL, parseGitDiffAddress, readGitDiff, titleOfDiffAddress, unreadableDiff,
 } from './diff.ts'
 import { installAutoHistory } from './autohistory.ts'
-import { installExpandProcessRows } from './expandall.ts'
+import { installExpandProcessRows, opensProcessRows } from './expandall.ts'
 import { closeEveryTab } from './closeall.ts'
 import { createGitSidebarFace } from './face.ts'
 import { installWaitingReporter } from './notify.ts'
@@ -355,7 +355,24 @@ export function apply(ctx: ClientContext): void {
   // than a git one; it lives here because this bundle is what this profile ships.
   if (typeof document !== 'undefined') {
     ctx.effect(() => installAutoHistory(document), 'git-tree: auto earlier history')
-    ctx.effect(() => installExpandProcessRows(document), 'git-tree: open process rows')
+    ctx.effect(() => {
+      // Read through the settings service rather than assuming a mode: a composition
+      // without it leaves the transcript exactly as DSH rendered it.
+      // Read opportunistically: requiring this service would hold the whole client half
+      // un-activated if it is ever absent, and losing the plugin costs far more than
+      // losing the mode gate — the pill's live rate is published from it.
+      const forms = (ctx as unknown as {
+        get?(name: string): unknown
+      }).get?.('configForms') as { get(namespace: string): {
+        getSnapshot(): { value?: { transcriptView?: string } }
+        subscribe(listener: () => void): () => void
+      } | undefined } | undefined
+      const settings = forms?.get('ui-chat')
+      const opens = (): boolean => opensProcessRows(settings?.getSnapshot()?.value?.transcriptView)
+      const dispose = installExpandProcessRows(document, undefined, opens)
+      const unsubscribe = settings?.subscribe(() => {})
+      return () => { dispose(); unsubscribe?.() }
+    }, 'git-tree: open process rows')
   }
 
   // ── per-workspace panels ────────────────────────────────────────────────────

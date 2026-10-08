@@ -33,6 +33,24 @@ const ROW = '[data-expandable]'
 const FLOW = '[data-chat-flow]'
 
 /** The ancestors that name a row: a tool call, or a node and its group part. */
+/**
+ * Whether a work-details mode wants the process rows opened.
+ *
+ * DSH's own `transcriptView` setting owns how much of a call is shown, and it works by
+ * structure rather than height: `compact` collapses the step groups, `standard` and
+ * `detailed` keep them collapsed or grouped as history, and only `verbose` lists the
+ * process rows directly. Opening rows in any other mode overrides the reader's choice of
+ * detail, and the setting stops appearing to do anything — which is what happened.
+ *
+ * So this acts only in `verbose`, and does nothing when the mode cannot be read: the safe
+ * failure is to leave the transcript as DSH rendered it.
+ * @param mode - the saved `transcriptView` value, if any.
+ * @returns true when the mode shows process rows directly.
+ */
+export function opensProcessRows(mode: string | undefined): boolean {
+  return mode === 'verbose'
+}
+
 const KEYED = '[data-chat-call-id], [data-chat-node-key]'
 
 /** How often a batch of transcript changes is allowed to trigger one pass. */
@@ -122,11 +140,13 @@ export function expandClosedRows(
  * Open the transcript's closed process rows as they appear.
  * @param target - the document to watch.
  * @param createObserver - how to observe; injected so this can be driven in a test.
+ * @param shouldOpen - consulted per pass; when false the transcript is left alone.
  * @returns a disposer that stops watching and disconnects the observer.
  */
 export function installExpandProcessRows(
   target: ExpandableDocument,
   createObserver: (callback: () => void) => RowObserver = callback => new MutationObserver(callback),
+  shouldOpen: () => boolean = () => true,
 ): () => void {
   /** Rows the reader closed themselves; their intent outranks ours. */
   const refused = new Set<string>()
@@ -135,6 +155,9 @@ export function installExpandProcessRows(
   let scheduled = false
   const pass = (): void => {
     scheduled = false
+    // The reader's chosen detail level outranks this: only a mode that lists process rows
+    // directly is one where they should be opened unprompted.
+    if (!shouldOpen()) return
     const flows = target.querySelectorAll(FLOW) as unknown as ArrayLike<FlowElement>
     for (let index = 0; index < flows.length; index += 1) {
       const flow = flows[index]

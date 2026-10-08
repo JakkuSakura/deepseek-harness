@@ -1,0 +1,24 @@
+# dsh-plugin-telegram bundle layer.
+#
+# The row is *inserted*, not patched: `- id: telegram` alone is read as a patch
+# against a row that does not exist yet, and DSH answers `patch: entry "telegram" not
+# found` on stderr while composing without it — a plugin that silently is not there.
+#
+# A bundle layer is applied after `@deepseek-ai/dsh-base` and `@deepseek-ai/dsh-web-app`
+# and before the profile's own `cordis.patch.yml`, so a profile can override any of
+# this by hand.
+
+- insert:
+    - id: telegram
+      name: 'dsh-plugin-telegram'
+      config:
+        # A credential *reference*, resolved per operation — never a token.
+        botTokenRef: TELEGRAM_BOT_TOKEN
+        # Who may drive this machine. A Telegram message becomes a prompt that can run
+        # tools here, so empty lists allow *nobody*: the bridge loads, logs what it
+        # refuses, and does nothing until both are filled in.
+        allowedChats: []
+        allowedUsers: []
+        # Where a notice goes when nothing more specific is known.
+        notifyChat: ''
+        pollTimeoutSeconds: 25
