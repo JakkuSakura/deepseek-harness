@@ -8,7 +8,7 @@
  */
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { expandClosedRows, installExpandProcessRows } from '../lib/testing/client-expandall.js'
+import { expandClosedRows, installExpandProcessRows, opensProcessRows } from '../lib/testing/client-expandall.js'
 
 /** A row that reports itself closed and counts how often it is clicked. */
 function closedRow(key) {
@@ -81,4 +81,29 @@ test('the bookkeeping is the reader\u2019s intent, not a one-shot memory', () =>
   assert.equal(expandClosedRows([row], refused), 1, 'closed again means opened again')
   const closed = new Set(['call-3'])
   assert.equal(expandClosedRows([row], closed), 0, 'but a refused key is skipped')
+})
+
+test('only the verbose work-details mode wants the rows opened', () => {
+  // DSH's policy owns this: compact collapses the groups, standard and detailed keep them
+  // grouped. Opening rows in those makes the setting appear to do nothing.
+  assert.equal(opensProcessRows('verbose'), true)
+  for (const mode of ['compact', 'standard', 'detailed', undefined, '']) {
+    assert.equal(opensProcessRows(mode), false, `${String(mode)} must not open rows`)
+  }
+})
+
+test('the watcher leaves the transcript alone when the mode does not ask for it', async () => {
+  const row = closedRow('call-quiet')
+  const target = fakeDocument([row])
+  let fire = null
+  installExpandProcessRows(target, (callback) => {
+    fire = callback
+    return { observe: () => {}, disconnect: () => {} }
+  }, () => false)
+  assert.equal(row.clicks, 0, 'the first pass must not open anything')
+  fire()
+  await new Promise(resolve => setTimeout(resolve, 250))
+  fire()
+  await new Promise(resolve => setTimeout(resolve, 250))
+  assert.equal(row.clicks, 0, 'and neither must later passes')
 })
