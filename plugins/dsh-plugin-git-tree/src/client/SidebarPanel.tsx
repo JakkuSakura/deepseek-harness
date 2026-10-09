@@ -205,6 +205,24 @@ export function GitSidebar(props: GitSidebarProps): ReactNode {
   // state the Files tab uses, keyed by absolute path.
   const [submodules, setSubmodules] = useState<ReadonlySet<string>>(() => new Set<string>())
 
+  // The Files tab's state follows the Session: the tree belongs to the Session, so what is
+  // open in it should too. The restore happens during render — React's own pattern for
+  // adjusting state when a key changes — because an effect would run after the persist
+  // effect below had already written one Session's expansion under another's id.
+  const filesHeld = useRef(new Map<string, { expanded: readonly string[]; submodules: ReadonlySet<string> }>())
+  const filesKey = sessionId === undefined ? undefined : String(sessionId)
+  const filesKeyRef = useRef<string | undefined>(filesKey)
+  if (filesKeyRef.current !== filesKey) {
+    filesKeyRef.current = filesKey
+    const held = filesKey === undefined ? undefined : filesHeld.current.get(filesKey)
+    setExpanded(held?.expanded ?? [])
+    setSubmodules(held?.submodules ?? new Set<string>())
+  }
+  useEffect(() => {
+    if (filesKey === undefined) return
+    filesHeld.current.set(filesKey, { expanded, submodules })
+  }, [filesKey, expanded, submodules])
+
   // The reload effect reads the expansion set at gesture time without depending
   // on it, so opening a directory never re-reads the whole tree.
   const expandedRef = useRef<readonly string[]>([])

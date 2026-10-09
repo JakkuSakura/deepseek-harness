@@ -268,7 +268,6 @@ test('apply shadows the Workspaces region, registers dictionaries, and takes the
       'git-tree: report sessions waiting for input',
     'git-tree: close-all menu entry',
     'git-tree: changes title',
-    'git-tree: per-workspace panels',
     'git-tree: workspaces region',
   ])
 })
@@ -360,28 +359,23 @@ test('the Changes body draws the diff it is handed', () => {
   assert.match(markup, /gt-diff-hunk/)
 })
 
-test('entering a Session of a Workspace reopens what that Workspace had', () => {
+test('entering a Session leaves the tab layout to DSH', () => {
+  // The kit keys a panel layout by Session, so each Session keeps its own tabs without
+  // help. An earlier version of this plugin re-opened a Workspace's tabs on entering and
+  // closed the ones it no longer held; that override is removed, and this asserts the
+  // plugin does not touch tabs at all.
   const registration = loadBundle()
   const plugin = registration.factory(moduleRequire)
-  const { ctx, seen } = recordingContext()
+  const { ctx } = recordingContext()
+  const opened = []
+  const closed = []
+  ctx.sidebarRight.openResource = (address) => { opened.push(address) }
+  ctx.sidebarRight.close = (id) => { closed.push(id) }
   plugin.apply(ctx)
-
-  // One Workspace holding two Sessions; the first is foreground and empty.
-  seen.workspaceList.set({ items: [{ workspaceId: 'w1', sessionIds: ['s1', 's2'] }], archivedSessionIds: [] })
-  seen.mounted.set('s1')
-
-  // A tab is opened in it: that becomes the Workspace's set.
-  const address = 'dsh-resource://gitdiff/session/s1/src/a.ts'
-  seen.openTabs.set([{ sessionId: 's1', kind: 'git-changes', contentId: address }])
-  assert.deepEqual(seen.opened, [])
-
-  // Moving to the Workspace's other Session restores it there — at that Session's
-  // own address. Addresses are Session-scoped, so replaying s1's verbatim would open
-  // a resource belonging to s1, which is why every switch used to re-open the set
-  // and the tabs piled up.
-  seen.mounted.set('s2')
-  assert.deepEqual(seen.opened, ['dsh-resource://gitdiff/session/s2/src/a.ts'])
+  assert.deepEqual(opened, [], 'the plugin must not open a tab on its own')
+  assert.deepEqual(closed, [], 'and must not close one either')
 })
+
 
 test('closing the last tab is remembered, so a collapse does not restore it', () => {
   // Closing the last tab collapses the column, which unmounts the seat. If a

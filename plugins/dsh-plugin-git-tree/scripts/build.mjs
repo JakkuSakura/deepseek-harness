@@ -132,7 +132,6 @@ await build({
     'client-pillrate': 'src/client/pillrate.ts',
     'client-route': 'src/client/route.ts',
     'client-closeall': 'src/client/closeall.ts',
-    'client-workspacepanels': 'src/client/workspacepanels.ts',
     'client-autohistory': 'src/client/autohistory.ts',
     'client-expandall': 'src/client/expandall.ts',
     'client-drafts': 'src/client/drafts.ts',

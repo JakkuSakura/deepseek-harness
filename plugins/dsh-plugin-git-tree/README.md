@@ -136,9 +136,10 @@ sidebar** in the DeepSeek Harness web GUI.
     The panel's status bar shows the same measurement and does not touch anyone's
     DOM, so it is the one to prefer if this ever misbehaves.
 
-  - **The right Sidebar's tabs are shelved per Workspace, not per Session.** DSH keys
-    a panel layout by Session, so two Sessions of one Workspace get two independent
-    tab sets; the unit a reader thinks in is the Workspace.
+  - **The right Sidebar's tabs follow the Session**, which is DSH's own behaviour: the kit
+    keys a panel layout by Session, so each Session keeps its own tab set. An earlier version
+    shelved them per Workspace instead; that override is removed, and the plugin no longer
+    opens or closes a tab on the reader's behalf.
 
     The subtlety that made this a bug rather than a feature: a resource address is
     **Session-scoped** — `dsh-resource://<protocol>/session/<id>/<path>` — so the

@@ -22,17 +22,12 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-resources/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
-import type { ISidebarRight } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { ChangesTitle, ChangesView } from './ChangesView.tsx'
 import { CloseAllMenuItem } from './CloseAllMenuItem.tsx'
-import {
-  WorkspacePanels, extraTabs, missingTabs, restorableAddress, sessionTabs, workspaceOfSession,
-} from './workspacepanels.ts'
-import type { OpenTabsSource } from './workspacepanels.ts'
 import {
   GIT_DIFF_PROTOCOL, parseGitDiffAddress, readGitDiff, titleOfDiffAddress, unreadableDiff,
 } from './diff.ts'
@@ -51,26 +46,6 @@ export type { GitSidebarFace } from './face.ts'
 export type { GitTreeKey } from './locales.ts'
 export type { LevelState } from './levels.ts'
 
-/**
- * The right Sidebar's open-tab inventory, or undefined when the running controller
- * does not carry one.
- *
- * `ISidebarRight` is operations only and lists no tabs. The controller instance
- * carries the inventory regardless — documented as "read-only metadata observable
- * shared with content providers" — but the package re-exports the interface rather
- * than the class, so the field has to be named here instead of reached through the
- * declared type. It is only ever read: nothing in this plugin writes a layout
- * through it.
- * @param sidebarRight - the cross-plugin right-Sidebar face.
- * @returns the inventory source, or undefined when it is not there to read.
- */
-function readOpenTabs(sidebarRight: ISidebarRight): OpenTabsSource | undefined {
-  const candidate = sidebarRight as unknown as { openTabs?: OpenTabsSource }
-  const source = candidate.openTabs
-  if (source === undefined) return undefined
-  if (typeof source.getSnapshot !== 'function' || typeof source.subscribe !== 'function') return undefined
-  return source
-}
 
 /**
  * Wait one poll interval, or return as soon as the holder goes away.
@@ -375,78 +350,11 @@ export function apply(ctx: ClientContext): void {
     }, 'git-tree: open process rows')
   }
 
-  // ── per-workspace panels ────────────────────────────────────────────────────
-  // The kit keys a panel by Session; a reader thinks in Workspaces. Entering a
-  // Session opens whatever its Workspace had, and the foreground Session's own
-  // tabs become that Workspace's set from then on.
-  //
-  // Two rules keep that from becoming a loop, and both were learned the hard way.
-  // Closing the last tab collapses the column, which unmounts the seat — so a
-  // missing seat is *not* a departure: the tracked Session is kept, and coming back
-  // to it is never an arrival. And the set is recorded whether or not a seat is
-  // mounted, because otherwise the one moment that matters most — the reader
-  // emptying the panel — is the one moment nothing gets recorded, and the next
-  // mount restores the tab they just closed.
-  const panels = new WorkspacePanels()
-  const openTabs = readOpenTabs(ctx.sidebarRight)
-  if (openTabs !== undefined) {
-    let foreground: string | undefined
-    let entering = false
-    const sync = (): void => {
-      const mounted = ctx.sidebarRight.mounted.getSnapshot()
-      if (mounted !== undefined && String(mounted) !== foreground) {
-        foreground = String(mounted)
-        entering = true
-        const entered = workspaceOfSession(
-          ctx.workspaces.list.getSnapshot().items,
-          foreground,
-        )
-        if (entered !== undefined) {
-          const open = sessionTabs(openTabs.getSnapshot(), foreground)
-          const desired = panels.tabs(entered)
-          // Opening alone is not enough. Each Session keeps its own copy of the
-          // Workspace's tabs, so one still holding a tab the reader closed elsewhere
-          // would hand it back to the set the moment it was recorded — and the tab
-          // would return from the dead on every switch. Entering makes the Session
-          // match the set, in both directions.
-          for (const tab of missingTabs(desired, open, foreground)) {
-            const address = restorableAddress(tab)
-            if (address !== undefined) ctx.sidebarRight.openResource(address)
-          }
-          for (const tab of extraTabs(desired, open, foreground)) {
-            // The inventory's id is a branded string; the controller only reads it.
-            if (tab.tabId !== undefined) {
-              ctx.sidebarRight.close(tab.tabId as Parameters<typeof ctx.sidebarRight.close>[0])
-            }
-          }
-        }
-        return
-      }
-      // No seat, or the same one: keep recording the tracked Session's own tabs.
-      if (foreground === undefined) return
-      const workspaceId = workspaceOfSession(ctx.workspaces.list.getSnapshot().items, foreground)
-      if (workspaceId === undefined) return
-      const open = sessionTabs(openTabs.getSnapshot(), foreground)
-      if (entering) {
-        // The tick after arriving is skipped: a Session is empty at the instant it
-        // becomes foreground, and recording it then would erase the memory. The
-        // opens above arrive as inventory changes, and the sync that follows them
-        // records the settled set.
-        entering = false
-        if (open.length === 0) return
-      }
-      panels.record(workspaceId, open)
-    }
-    ctx.effect(() => {
-      const stops = [
-        openTabs.subscribe(sync),
-        ctx.sidebarRight.mounted.subscribe(sync),
-        ctx.workspaces.list.subscribe(sync),
-      ]
-      sync()
-      return () => { for (const stop of stops) stop() }
-    }, 'git-tree: per-workspace panels')
-  }
+  // ── panels follow their Session ──────────────────────────────────────────────
+  // DSH's kit already keys a right-panel layout by Session, which is what this panel
+  // wants: every Session keeps its own tabs, and moving between them shelves and restores
+  // nothing. An earlier version overrode that to shelve tabs per Workspace, and is gone —
+  // so nothing here opens or closes a tab on the reader's behalf.
 
   // The controller is a service, not an optional one: the sidebar is mounted
   // whenever this region is, so the walk reads it directly.
