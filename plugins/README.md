@@ -11,3 +11,18 @@ source they change.
 
 The Telegram plugin was removed: it had never been configured, and it does not activate on
 DSH 0.2.1, where it waits for a `webhookRuntime` service that version does not provide.
+
+## Vendoring
+
+The git bundle is **authored in `SakuraLens/deepseek-harness-plugin`** and **vendored here**.
+The copy in this directory is a mirror of that checkout, kept so the machines that run DSH
+resolve the plugin from the fork rather than from a working copy:
+
+```sh
+rsync -a --delete --exclude node_modules --exclude .git \
+  ~/Dev/SakuraLens/deepseek-harness-plugin/ ~/Dev/deepseek-harness/plugins/dsh-plugin-git-tree/
+```
+
+`--delete` is load-bearing: without it a module removed at the source survives here, which is
+how this copy kept carrying a file the authoring checkout had already dropped. `node_modules`
+is excluded so the installed dependencies are left alone — a `link:` target resolves its own.
