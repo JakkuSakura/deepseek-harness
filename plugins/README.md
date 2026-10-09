@@ -14,15 +14,17 @@ DSH 0.2.1, where it waits for a `webhookRuntime` service that version does not p
 
 ## Vendoring
 
-The git bundle is **authored in `SakuraLens/deepseek-harness-plugin`** and **vendored here**.
-The copy in this directory is a mirror of that checkout, kept so the machines that run DSH
-resolve the plugin from the fork rather than from a working copy:
+The git bundle is **authored in `SakuraLens/deepseek-harness-plugin`** and **vendored here**,
+because the machines that run DSH resolve the plugin from the fork rather than from a working
+copy.
 
-```sh
-rsync -a --delete --exclude node_modules --exclude .git \
-  ~/Dev/SakuraLens/deepseek-harness-plugin/ ~/Dev/deepseek-harness/plugins/dsh-plugin-git-tree/
-```
+That is done by `plugins/vendor.sh`, wired as this repository's `postinstall` — so a plain
+`pnpm install` refreshes the mirror. It is a **no-op** wherever the authoring checkout is
+absent or does not *track* the plugin, which matters because jakku-mp4 has an old `SakuraLens`
+tree holding stale, untracked copies of these plugins, and vendoring from those would quietly
+regress the fork.
 
-`--delete` is load-bearing: without it a module removed at the source survives here, which is
-how this copy kept carrying a file the authoring checkout had already dropped. `node_modules`
-is excluded so the installed dependencies are left alone — a `link:` target resolves its own.
+Two details in that script are load-bearing. `--delete`, because an overlay leaves behind
+modules the source has dropped — how this copy once kept carrying a file its authoring
+checkout had already removed. And the exclusion of `node_modules`, because a `link:` target
+resolves its own dependencies and overwriting them would break the running install.
