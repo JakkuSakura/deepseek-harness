@@ -13,12 +13,13 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 export const name = 'command-goal'
 export const inject = ['commands', 'goals']
 
-const USAGE = 'Usage: /goal [<objective>|clear|pause|resume]'
+const USAGE = 'Usage: /goal [<objective>|clear|edit <objective>|pause|resume]'
 
 type GoalCommand =
   | { readonly kind: 'show' }
   | { readonly kind: 'create'; readonly objective: string }
-  | { readonly kind: 'removed' }
+  | { readonly kind: 'edit'; readonly objective: string }
+  | { readonly kind: 'invalid-edit' }
   | { readonly kind: 'pause' }
   | { readonly kind: 'resume' }
   | { readonly kind: 'clear' }
@@ -38,10 +39,8 @@ function parseGoalCommand(rawInput: string): GoalCommand {
   if (control === 'clear') return { kind: 'clear' }
   if (control === 'pause') return { kind: 'pause' }
   if (control === 'resume') return { kind: 'resume' }
-  // `edit` is the one verb that is gone. It is refused rather than reinterpreted, because
-  // the fall-through below reads anything unrecognised as an *objective* — so
-  // `/goal edit something` would otherwise become a goal about editing something.
-  if (control === 'edit' || /^edit(?=\s)/iu.test(input)) return { kind: 'removed' }
+  if (control === 'edit') return { kind: 'invalid-edit' }
+  if (/^edit(?=\s)/iu.test(input)) return { kind: 'edit', objective: input.slice(4).trim() }
   return { kind: 'create', objective: input }
 }
 
@@ -126,10 +125,10 @@ function submitObjectiveAttachments(invocation: CommandInvocation): void {
 /** Execute one parsed human command through the domain that owns persistence. */
 function executeGoalCommand(ctx: Context, invocation: CommandInvocation): CommandResult {
   const command = parseGoalCommand(invocation.rawInput)
-  if (invocation.attachments.length > 0 && command.kind !== 'create') {
+  if (invocation.attachments.length > 0 && command.kind !== 'create' && command.kind !== 'edit') {
     return {
       kind: 'error',
-      text: 'Attachments only accompany a goal objective: /goal <objective>.',
+      text: 'Attachments only accompany a goal objective: /goal <objective> or /goal edit <objective>.',
     }
   }
   try {
@@ -139,8 +138,19 @@ function executeGoalCommand(ctx: Context, invocation: CommandInvocation): Comman
         return current === undefined
           ? { kind: 'success', text: `No goal is currently set.\n${USAGE}` }
           : renderGoal('Goal', current)
-      case 'removed':
-        return { kind: 'error', text: `Goal objectives cannot be edited. ${USAGE}` }
+      case 'invalid-edit':
+        return { kind: 'error', text: `Goal editing requires a replacement objective.\n${USAGE}` }
+      case 'edit': {
+        if (current === undefined) return missingGoal('edit')
+        if (current.phase === 'complete') {
+          const replaced = ctx.goals.create(invocation.agent, { objective: command.objective })
+          submitObjectiveAttachments(invocation)
+          return renderGoal('Goal created', replaced)
+        }
+        const edited = ctx.goals.edit(invocation.agent, goalRef(current), { objective: command.objective })
+        submitObjectiveAttachments(invocation)
+        return renderGoal('Goal updated', edited)
+      }
       case 'create': {
         // An objective always wins. A goal that is still there is cleared and replaced
         // rather than refused: the refusal made the reader run `/goal clear` first to get
@@ -187,7 +197,7 @@ export function apply(ctx: Context): void {
     definitionId: CommandDefinitionId('@deepseek-ai/dsh-command-goal'),
     name: 'goal',
     description: 'Set or view the goal for a long-running task',
-    input: { hint: '[<objective>|clear|pause|resume]', attachments: true },
+    input: { hint: '[<objective>|clear|edit <objective>|pause|resume]', attachments: true },
     handler: invocation => executeGoalCommand(ctx, invocation),
   })
 }

@@ -101,7 +101,7 @@ describe('@deepseek-ai/dsh-command-goal registration', () => {
       definitionId: '@deepseek-ai/dsh-command-goal',
       name: 'goal',
       description: 'Set or view the goal for a long-running task',
-      input: { hint: '[<objective>|clear|pause|resume]', attachments: true },
+      input: { hint: '[<objective>|clear|edit <objective>|pause|resume]', attachments: true },
     })
     expect(test.ctx.commands.find(test.agent, 'goal')).toBeDefined()
 
@@ -115,7 +115,7 @@ describe('/goal human command', () => {
     const test = await harness()
     await expect(run(test)).resolves.toEqual({
       kind: 'success',
-      text: 'No goal is currently set.\nUsage: /goal [<objective>|clear|pause|resume]',
+      text: 'No goal is currently set.\nUsage: /goal [<objective>|clear|edit <objective>|pause|resume]',
     })
     expect(domainEvents(test.session)).toEqual([])
   })
@@ -150,26 +150,23 @@ describe('/goal human command', () => {
     expect(test.ctx.goals.get(test.agent)?.objective).toBe('pause everything only after verification')
   })
 
-  it('refuses the removed edit verb, and replaces a complete goal with a new one', async () => {
+  it('edits inline, refuses a bare edit, and replaces a complete goal with a new one', async () => {
     const empty = await harness()
+    // A bare verb asks for an objective to replace with; the argument form edits in place.
     const bare = await run(empty, ' edit')
     expect(bare.kind).toBe('error')
-    expect(bare.text).toContain('Goal objectives cannot be edited')
-    // The fall-through reads anything unrecognised as an *objective*, so the refusal has
-    // to cover the argument form too, or `/goal edit something` becomes a goal about
-    // editing something. Nothing is created here either way.
-    const withArgument = await run(empty, ' edit replacement')
-    expect(withArgument.kind).toBe('error')
-    expect(withArgument.text).toContain('Goal objectives cannot be edited')
+    expect(bare.text).toContain('requires a replacement objective')
+    const withoutGoal = await run(empty, ' edit replacement')
+    expect(withoutGoal.kind).toBe('error')
     expect(empty.ctx.goals.get(empty.agent)).toBeUndefined()
 
     const test = await harness()
     await run(test, ' first')
     const first = test.ctx.goals.get(test.agent)!
-    const refused = await run(test, ' EDIT\n  second  ')
-    expect(refused.kind).toBe('error')
-    expect(refused.text).toContain('Goal objectives cannot be edited')
-    expect(test.ctx.goals.get(test.agent)?.objective).toBe('first')
+    const edited = await run(test, ' EDIT\n  second  ')
+    expect(edited.kind).toBe('success')
+    expect(edited.text).toContain('Goal updated')
+    expect(test.ctx.goals.get(test.agent)).toMatchObject({ id: first.id, objective: 'second', revision: 2 })
 
     const current = test.ctx.goals.get(test.agent)!
     test.ctx.goals.complete(test.agent, ref(current))
@@ -337,7 +334,7 @@ describe('/goal attachments', () => {
       const result = await runWithAttachments(test, suffix, false)
       expect(result).toEqual({
         kind: 'error',
-        text: 'Attachments only accompany a goal objective: /goal <objective>.',
+        text: 'Attachments only accompany a goal objective: /goal <objective> or /goal edit <objective>.',
       })
     }
     expect(followup).not.toHaveBeenCalled()
@@ -350,7 +347,7 @@ describe('/goal attachments', () => {
     const followup = vi.fn()
     ;(test.agent as unknown as { followup: typeof followup }).followup = followup
     test.ctx.goals.create(test.agent, { objective: 'existing objective' })
-    const result = await runWithAttachments(test, ' edit replacement objective')
+    const result = await runWithAttachments(test, ' edit')
     expect(result.kind).toBe('error')
     expect(followup).not.toHaveBeenCalled()
   })
