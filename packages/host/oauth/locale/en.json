@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "OAuth Sign-In",
+    "description": "Require OpenID Connect sign-in with an email, domain, or subject whitelist for the Web host."
+  }
+}

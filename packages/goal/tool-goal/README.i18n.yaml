@@ -24,8 +24,11 @@
   en: e3f5e8d634a488b7
   zh: 04dcf916aa2114d2
 /deepseek-ai-dsh-tool-goal/use-this-package/authority-rules:
-  en: a00f0dac577c3e9e
-  zh: 5dedb3dfcce449bc
+  en: 60e1aaa0d1be1a73
+  zh: 3a43da2367669f1a
+/deepseek-ai-dsh-tool-goal/use-this-package/completion-verification:
+  en: cffb76d84c2c4293
+  zh: 4eed0774c8f11bc9
 /deepseek-ai-dsh-tool-goal/understand-the-implementation:
   en: 4e9fdb5a89f4baa3
   zh: 50d182467ae1f3a7
@@ -72,8 +75,8 @@
   en: c2d2e98ce08fb40e
   zh: 54d278190a1a9ed5
 /deepseek-ai-dsh-tool-goal/known-limitations-and-deferred-work:
-  en: c9b0f788467a5062
-  zh: 1a94e89fbb2e1e41
+  en: c10be10242f4932d
+  zh: e8d76e4c5de86b3e
 /deepseek-ai-dsh-tool-goal/known-limitations-and-deferred-work/dev-note:
   en: 47101daa04549489
   zh: 1a3babd48193c068

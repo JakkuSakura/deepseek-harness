@@ -5,7 +5,7 @@ import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentStatus, Inbox } from '@deepseek-ai/dsh-agent'
 import { turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent-loop'
 import GoalService, { GoalId } from '@deepseek-ai/dsh-goal'
-import type { GoalRef } from '@deepseek-ai/dsh-goal'
+import type { GoalRef, GoalVerificationRequest, GoalVerifierService } from '@deepseek-ai/dsh-goal'
 import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { MessageSource } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
@@ -97,7 +97,7 @@ function closeTurn(stub: StubAgent, turn: number): void {
   stub.session.append('turn/end', { turn, reason: { kind: 'completed' } })
 }
 
-async function harness(config: toolGoal.Config = {}) {
+async function harness(config: toolGoal.Config = {}, verifier?: GoalVerifierService) {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
@@ -106,6 +106,7 @@ async function harness(config: toolGoal.Config = {}) {
   await ctx.plugin(ToolRuntime)
   ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
   await ctx.plugin(GoalService)
+  if (verifier !== undefined) ctx.provide('goalVerifier', verifier)
   const fiber = await ctx.plugin(toolGoal, config)
   const root = stubAgent(`goal-tool-root-${Math.random()}`, undefined, ctx)
   await ctx.agents.register(root.agent)
@@ -446,6 +447,84 @@ describe('goal tool state transitions', () => {
     expect(resultGoal(complete)).toMatchObject({ phase: 'complete' })
     expect(complete.concludesTurn).toBeUndefined()
     expect(complete.additionalContexts).toBeUndefined()
+  })
+
+  it('refuses an autonomous completion the mounted verifier does not certify', async () => {
+    const claims: GoalVerificationRequest[] = []
+    const { ctx, root } = await harness({}, {
+      verify(request) {
+        claims.push(request)
+        return Promise.resolve({ certified: false, reason: 'the gate still fails' })
+      },
+    })
+    const humanTurn = openTurn(root, { kind: 'user' })
+    const created = ctx.goals.create(root.agent, { objective: 'ship the gate fix' })
+    closeTurn(root, humanTurn)
+    openTurn(root, { kind: 'goal', goalId: created.id, revision: created.revision, round: 1 })
+    const refused = await execute(ctx, 'update_goal', {
+      goal_id: created.id, revision: created.revision, action: 'complete',
+    }, root.agent)
+    expect(refused.error?.info?.code).toBe('GOAL_VERIFICATION_REJECTED')
+    expect(ctx.goals.get(root.agent)?.phase).toBe('active')
+    expect(claims).toHaveLength(1)
+    expect(claims[0]?.ref).toEqual({ id: created.id, revision: created.revision })
+    expect(claims[0]?.goal.objective).toBe('ship the gate fix')
+    expect(claims[0]?.events.length).toBeGreaterThan(0)
+  })
+
+  it('skips verification when the claimed reference is already stale', async () => {
+    let calls = 0
+    const { ctx, root } = await harness({}, {
+      verify() {
+        calls += 1
+        return Promise.resolve({ certified: true, reason: 'not consulted' })
+      },
+    })
+    const humanTurn = openTurn(root, { kind: 'user' })
+    const created = ctx.goals.create(root.agent, { objective: 'ship it' })
+    closeTurn(root, humanTurn)
+    openTurn(root, { kind: 'goal', goalId: created.id, revision: created.revision, round: 1 })
+    const staleRevision = await execute(ctx, 'update_goal', {
+      goal_id: created.id, revision: created.revision + 1, action: 'complete',
+    }, root.agent)
+    expect(staleRevision.error?.info?.code).toBe('GOAL_STALE_REVISION')
+    const staleId = await execute(ctx, 'update_goal', {
+      goal_id: 'goal-other', revision: created.revision, action: 'complete',
+    }, root.agent)
+    expect(staleId.error?.info?.code).toBe('GOAL_STALE_REVISION')
+    expect(calls).toBe(0)
+    expect(ctx.goals.get(root.agent)?.phase).toBe('active')
+  })
+
+  it('records an autonomous completion the mounted verifier certifies', async () => {
+    const { ctx, root } = await harness({}, {
+      verify: () => Promise.resolve({ certified: true, reason: 'verified' }),
+    })
+    const humanTurn = openTurn(root, { kind: 'user' })
+    const created = ctx.goals.create(root.agent, { objective: 'ship it' })
+    closeTurn(root, humanTurn)
+    openTurn(root, { kind: 'goal', goalId: created.id, revision: created.revision, round: 1 })
+    const complete = await execute(ctx, 'update_goal', {
+      goal_id: created.id, revision: created.revision, action: 'complete',
+    }, root.agent)
+    expect(resultGoal(complete)).toMatchObject({ phase: 'complete' })
+  })
+
+  it('does not consult the verifier for a direct-human completion', async () => {
+    let calls = 0
+    const { ctx, root } = await harness({}, {
+      verify() {
+        calls += 1
+        return Promise.resolve({ certified: false, reason: 'not consulted' })
+      },
+    })
+    openTurn(root, { kind: 'user' })
+    const created = ctx.goals.create(root.agent, { objective: 'finish now' })
+    const complete = await execute(ctx, 'update_goal', {
+      goal_id: created.id, revision: created.revision, action: 'complete',
+    }, root.agent)
+    expect(resultGoal(complete)).toMatchObject({ phase: 'complete' })
+    expect(calls).toBe(0)
   })
 
   it('rearms a restored active goal only after a new direct human prompt', async () => {

@@ -82,6 +82,11 @@ dsh --profile web --no-open --host "$(hostname -i | awk '{print $1}')" --public-
 
 打印的 URL 包含进程凭据，只应与预期用户分享。`printUrl: false` 无论是否配置 `--public-url` 都会抑制该行，凭据也绝不会出现在模型上下文或 `DSH_WEB_URL` 中。
 
+<a id="single-sign-on"></a>
+### 单点登录
+
+`--oauth-issuer`、`--oauth-client-id`、`--oauth-client-secret-ref`、`--oauth-allow-email`、`--oauth-allow-domain` 和 `--oauth-allow-subject` 启用 [OpenID Connect 闸门](../../host/oauth/README.zh.md)。启用后，未登录的浏览器从索引页被重定向到提供方；回调完成后，闸门的 `HttpOnly` Cookie 无需启动令牌即可认证页面、`/api` 和 WebSocket 升级。打印的 URL 仍携带进程令牌，作为应急路径；只与预期用户共享。必须至少有一个白名单条目，不完整的 `--oauth-*` 参数族属于用法错误。
+
 ### 通过 SSH 运行
 
 通过 SSH 启动 `dsh --profile web` 时，URL 行仍会打印，但不会为你打开浏览器：本地转发地址由 SSH 客户端或编辑器持有。没有公告根时，打印的 URL 指向远端宿主机的绑定地址端点——绑定 loopback 时即 loopback——你通过自己的转发地址访问它。配置了 `--public-url` 时，打印的 URL 是带认证的公告根；浏览器交接仍被抑制，因为在远端宿主机上打开浏览器无法到达你的屏幕。

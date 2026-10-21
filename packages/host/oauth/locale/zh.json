@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "OAuth 登录",
+    "description": "为 Web 主机要求 OpenID Connect 登录，并按邮箱、域名或主体设置白名单。"
+  }
+}

@@ -800,6 +800,18 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'true only when the frontend may serve index.html.',
       },
       {
+        signature: 'registerBrowserAuthenticator(authenticator: BrowserSessionAuthenticator): () => void',
+        description: 'Accept one external browser-session credential for `/api` and index authentication, and let it own the login redirect for index requests.',
+        parameters: [{ name: 'authenticator', description: 'deployment-owned login gate credential.' }],
+        returns: 'disposer withdrawing the authenticator.',
+      },
+      {
+        signature: 'retireLaunchToken(): () => void',
+        description: 'Withdraw the process launch token from admission, leaving registered browser-session authenticators as the only way in. authenticatedUrl then stops carrying a token.',
+        parameters: [],
+        returns: 'disposer re-admitting the launch token.',
+      },
+      {
         signature: 'authenticatedUrl(baseUrl: string): string',
         description: 'Add the fresh process token to an ordinary Web application URL.',
         parameters: [{ name: 'baseUrl', description: 'clean application URL whose authority and mount are preserved.' }],
@@ -1270,6 +1282,20 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Create one Goal through the remote boundary.',
         parameters: [{ name: 'agent', description: 'exact live Agent resolved from the wire identity.' }, { name: 'request', description: 'objective and optional round cap.' }],
         returns: 'the created Goal identity.',
+      },
+    ],
+  },
+  {
+    key: 'goalVerifier',
+    summary: 'Completion-certification service.',
+    description: 'Completion-certification service. A composition mounts at most one verifier; `update_goal` consults it before recording an autonomous completion claim.',
+    methods: [
+      {
+        signature: 'verify(request: GoalVerificationRequest): Promise<GoalVerificationVerdict>',
+        description: 'Certify or refuse one autonomous completion claim.',
+        parameters: [{ name: 'request', description: 'exact goal revision, immutable evidence cut, and cancellation.' }],
+        returns: 'the certification verdict; refusals keep the goal active.',
+        throws: ['when verification itself fails (provider error, unusable response); callers must treat that as a refusal rather than as certification.'],
       },
     ],
   },
@@ -4906,10 +4932,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface AuthorizationFlow {\n    readonly key: CredentialKey;\n    readonly label: string;\n    readonly methods: readonly [\n        AuthorizationMethod,\n        ...AuthorizationMethod[]\n    ];\n    run(session: AuthorizationSession): Promise<void>;\n}',
   },
   {
-    name: 'AuthorizationInteraction',
-    declaration: 'export interface AuthorizationInteraction {\n    notify(notice: AuthorizationNotice): void;\n    prompt(prompt: AuthorizationPrompt): Promise<string>;\n}',
-  },
-  {
     name: 'AuthorizationMethod',
     declaration: 'export interface AuthorizationMethod {\n    id: string;\n    label: string;\n}',
   },
@@ -4928,10 +4950,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'AuthorizationPromptOption',
     declaration: 'export interface AuthorizationPromptOption {\n    id: string;\n    label: string;\n    description?: string;\n}',
-  },
-  {
-    name: 'AuthorizationRequest',
-    declaration: 'export interface AuthorizationRequest {\n    key: CredentialKey;\n    method?: string;\n    interaction: AuthorizationInteraction;\n    signal?: AbortSignal;\n}',
   },
   {
     name: 'AuthorizationSession',
@@ -4972,6 +4990,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'BrandedNumber',
     declaration: 'export type BrandedNumber<B extends string> = number & {\n    readonly [BRAND]: B;\n};',
+  },
+  {
+    name: 'BrowserSessionAuthenticator',
+    declaration: 'export interface BrowserSessionAuthenticator {\n    isAuthenticated(request: ConnectionTrustRequest): boolean;\n    authorizeIndex?(request: ConnectionIndexRequest, response: ConnectionIndexResponse): boolean;\n}',
   },
   {
     name: 'BrowserUseProviderName',
@@ -5612,6 +5634,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'GoalSnapshot',
     declaration: 'export interface GoalSnapshot extends GoalRef {\n    readonly objective: string;\n    readonly phase: GoalPhase;\n    readonly blockedReason?: GoalBlockReason;\n    readonly maxGoalRounds: number;\n}',
+  },
+  {
+    name: 'GoalVerificationRequest',
+    declaration: 'export interface GoalVerificationRequest {\n    readonly agent: Agent;\n    readonly goal: GoalView;\n    readonly ref: GoalRef;\n    readonly events: readonly SessionEvent[];\n    readonly signal?: AbortSignal;\n}',
+  },
+  {
+    name: 'GoalVerificationVerdict',
+    declaration: 'export interface GoalVerificationVerdict {\n    readonly certified: boolean;\n    readonly reason: string;\n}',
   },
   {
     name: 'GoalView',
@@ -8251,7 +8281,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ToolExecutionSuccess',
-    declaration: 'export interface ToolExecutionSuccess {\n    readonly isError: false;\n    readonly value: JsonValue;\n    readonly content: ContentBlock[];\n    readonly error?: never;\n    readonly meta?: JsonValue;\n    readonly additionalContexts?: UserMessage[];\n    readonly concludesTurn?: true;\n}',
+    declaration: 'export interface ToolExecutionSuccess {\n    readonly isError: false;\n    readonly value: JsonValue;\n    readonly content: ContentBlock[];\n    readonly error?: never;\n    readonly meta?: JsonValue;\n    readonly additionalContexts?: UserMessage[];\n    readonly concludesTurn?: true;\n    readonly detached?: true;\n}',
   },
   {
     name: 'ToolExecutionToken',

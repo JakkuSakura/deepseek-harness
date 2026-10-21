@@ -6,6 +6,7 @@ import { CONNECT_PATH, type ConnectionInteractions } from './connect-protocol.ts
 import { credentialKey } from '@deepseek-ai/dsh-credentials'
 import type { CredentialProvider, CredentialRecord } from '@deepseek-ai/dsh-credentials'
 import type {
+  BrowserSessionAuthenticator,
   ConnectionIndexRequest,
   ConnectionIndexResponse,
   ConnectionTrustRequest,
@@ -206,6 +207,8 @@ async function initializeSecret(credentials: CredentialProvider): Promise<Buffer
 export class BrowserAuth {
   private readonly launchToken: string
   private readonly maxAgeMilliseconds: number
+  private readonly authenticators = new Set<BrowserSessionAuthenticator>()
+  private launchTokenRetired = false
 
   private constructor(
     processOwner: object,
@@ -239,11 +242,12 @@ export class BrowserAuth {
   /**
    * Add this process's launch token to the caller's application URL.
    * @param baseUrl - clean browser URL whose authority and mount are preserved.
-   * @returns the same URL carrying the process token as its sole authentication input.
+   * @returns the same URL carrying the process token as its sole authentication
+   * input, or unchanged once {@link retireLaunchToken} withdrew it.
    */
   authenticatedUrl(baseUrl: string): string {
     const url = new URL(baseUrl)
-    url.searchParams.set(TOKEN_QUERY, this.launchToken)
+    if (!this.launchTokenRetired) url.searchParams.set(TOKEN_QUERY, this.launchToken)
     return url.href
   }
 
@@ -251,7 +255,9 @@ export class BrowserAuth {
    * Authenticate an index request. A valid root query token mints the cookie
    * and redirects to the directory-relative clean `./`; a valid cookie lets
    * the caller serve the index; every other request receives the same minimal
-   * 401 response.
+   * 401 response. Once {@link retireLaunchToken} withdrew the token, a request
+   * that still carries one takes the cookie and authenticator path, so the
+   * deployment's login gate owns the response.
    * @param req - incoming root or configured-index request.
    * @param res - response owned when this method returns false.
    * @param secure - whether the listener receiving this request serves TLS; the
@@ -264,7 +270,7 @@ export class BrowserAuth {
     /* v8 ignore next -- node:http always supplies url on server requests. */
     const url = new URL(req.url ?? '/', 'http://dsh.invalid')
     const tokens = url.searchParams.getAll(TOKEN_QUERY)
-    if (tokens.length > 0) {
+    if (tokens.length > 0 && !this.launchTokenRetired) {
       const authority = requestAudience(req.headers, secure)
       if (req.method === 'GET' && url.pathname === '/' && tokens.length === 1
         && authority !== undefined && tokenMatches(tokens.join(''), this.launchToken)) {
@@ -300,6 +306,9 @@ export class BrowserAuth {
       return false
     }
     if (this.isAuthenticated(req, secure)) return true
+    for (const authenticator of this.authenticators) {
+      if (authenticator.authorizeIndex?.(req, res) === true) return false
+    }
     this.writeUnauthorized(req, res)
     return false
   }
@@ -348,13 +357,40 @@ export class BrowserAuth {
   }
 
   /**
+   * Accept one deployment-owned browser-session credential.
+   * @param authenticator - external login gate authenticator.
+   * @returns disposer withdrawing it from later requests.
+   */
+  registerAuthenticator(authenticator: BrowserSessionAuthenticator): () => void {
+    this.authenticators.add(authenticator)
+    return () => { this.authenticators.delete(authenticator) }
+  }
+
+  /**
+   * Withdraw the process launch token from admission, leaving registered
+   * browser-session authenticators as the only way in. A deployment-owned login
+   * gate calls this when it takes over authentication: the printed URL stops
+   * carrying a token, a `?token=` request no longer mints a cookie, and cookies
+   * minted from an earlier token stop admitting.
+   * @returns disposer re-admitting the launch token.
+   */
+  retireLaunchToken(): () => void {
+    this.launchTokenRetired = true
+    return () => { this.launchTokenRetired = false }
+  }
+
+  /**
    * Verify the authority-bound browser cookie on a Host request.
    * @param request - request headers carrying Host and Cookie.
    * @param secure - whether the receiving listener uses TLS, including its default port.
    * @returns true only for an unexpired cookie signed by this activation's loaded secret.
    */
   isAuthenticated(request: ConnectionTrustRequest, secure = false): boolean {
-    return this.authenticate(request, secure)?.version === COOKIE_PAYLOAD_VERSION
+    if (this.isCookieAuthenticated(request, secure)?.version === COOKIE_PAYLOAD_VERSION) return true
+    for (const authenticator of this.authenticators) {
+      if (authenticator.isAuthenticated(request)) return true
+    }
+    return false
   }
 
   /**
@@ -364,11 +400,12 @@ export class BrowserAuth {
    * @returns the signed operator id, or undefined for invalid, expired, or browser cookies.
    */
   authenticateApi(request: ConnectionTrustRequest, secure = false): PeerId | undefined {
-    const payload = this.authenticate(request, secure)
+    const payload = this.isCookieAuthenticated(request, secure)
     return payload?.version === 2 ? payload.id : undefined
   }
 
-  private authenticate(request: ConnectionTrustRequest, secure: boolean): CookiePayload | undefined {
+  private isCookieAuthenticated(request: ConnectionTrustRequest, secure: boolean): CookiePayload | undefined {
+    if (this.launchTokenRetired) return undefined
     const authority = requestAudience(request.headers, secure)
     const rawCookie = header(request.headers, 'cookie')
     if (authority === undefined || rawCookie === undefined) return undefined
@@ -381,6 +418,7 @@ export class BrowserAuth {
       || payload.expiresAt - payload.issuedAt > this.maxAgeMilliseconds) return undefined
     return payload
   }
+
 
   private writeUnauthorized(req: ConnectionIndexRequest, res: ConnectionIndexResponse): void {
     res.writeHead(401, {

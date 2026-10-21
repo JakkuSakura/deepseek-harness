@@ -45,6 +45,10 @@ The served HTML carries one document base, `<base href="./">`, ahead of every in
 
 Root and configured-index responses call `ctx.connection.authorizeIndex` before reading HTML. A valid process token receives a 303 redirect plus the persistent browser cookie; an existing valid cookie serves the index; every other index request receives the Connection-owned 401 response. Non-index files remain public static assets. Connection owns the token, cookie, expiry, and signing-record semantics.
 
+### Repeat visits and conditional requests
+
+Every response carries an `ETag`. Vite content-hashed names under `/assets/` are served `public, max-age=31536000, immutable`; every other file is served `no-cache` with `Last-Modified`, so a browser revalidates instead of redownloading. A matching `If-None-Match` returns an empty 304, including for the rendered index, whose ETag covers the current injection rows. This keeps a flaky or high-latency link from re-fetching unchanged bundles and HTML on every reconnect.
+
 ### Observable failures
 
 Traversal returns 403 rather than an error page. An absent or non-file target inside the dist root returns an empty 404, so a stale link or a mistyped pathname is an explicit failure rather than a silent SPA fallback. Claiming the seat twice throws, and while the seat is unclaimed the webserver answers 404 — which is what a browser sees if this plugin's fiber is disposed.
@@ -104,6 +108,7 @@ None; this package neither assembles nor sends a provider request.
 These limits define when a served asset class is not yet covered. They are current package constraints, not a task backlog.
 
 - **The starter MIME table is minimal** — it covers the Vite-emitted asset set plus the shipped PWA manifest; other extensions fall back to `application/octet-stream` until an asset class ships.
+- **Asset ETags come from size and modification time** — a writer that changes bytes without a new `mtime` would keep the previous validator. Build outputs and editor saves update `mtime`, so this is a deliberate cheaper alternative to hashing every asset per request.
 - **Pathname routing is explicit** — the current client enters through the root or configured index path and has no History API pathname routes. Adding one requires an explicit server rule and real-composition coverage rather than a broad fallback for every miss.
 
 <a id="dev-note"></a>

@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-19-model-visible-context-usage.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-19-model-visible-context-usage.md
+/agent-note-model-visible-context-usage:
+  en: 9616800007b59125
+  zh: ad06fb64c8f7707c
+/agent-note-model-visible-context-usage/problem:
+  en: 10cb395197b4eea1
+  zh: fc06b7561f993462
+/agent-note-model-visible-context-usage/decision:
+  en: 1fbc6530415d042b
+  zh: e90ebd05a22910b0
+/agent-note-model-visible-context-usage/reporting-contract:
+  en: 3d7a8a83340af42e
+  zh: 71615defaf6799dc
+/agent-note-model-visible-context-usage/alternatives-considered:
+  en: f5a3556b20a60bc0
+  zh: 55c8140a9643b6a6
+/agent-note-model-visible-context-usage/consequences:
+  en: 40757eea989d7a91
+  zh: b5dfae49a075a43e

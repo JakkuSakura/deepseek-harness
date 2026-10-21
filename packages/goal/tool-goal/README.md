@@ -56,6 +56,10 @@ The tools execute only for the exact live calling agent inside its active driver
 
 An autonomous round that successfully reports `complete` or `blocked` also ends the physical turn after that step, and the model receives a closing instruction to write the final message to the user. Direct-human mutations never trigger that stop: the assistant may acknowledge the change and the loop keeps concurrent human steering available.
 
+### Completion verification
+
+When the composition mounts a `ctx.goalVerifier` provider, an autonomous `complete` claim is certified before the goal service records it: the tool passes the exact claimed revision, the goal view, the session cut it already holds for authority checks, and the execution signal to the verifier. An uncertified claim fails the call with `GOAL_VERIFICATION_REJECTED` and the verifier's reason, and the goal stays active. A direct-human completion is never sent to the verifier, the absent service skips the step entirely, and `blocked` is unaffected. [`dsh-goal-verifier-llm`](../goal-verifier-llm/README.md) implements the provider.
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -147,6 +151,7 @@ These limits define when the goal tools are a poor fit or need special care. The
 
 - **Semantic intent remains model judgment** — execution can prove that the current turn contains a direct human message, not whether the request is substantial enough to merit a goal.
 - **Same-condition blocking remains model judgment** — the runtime enforces distinct admitted-round count, not semantic equivalence of obstacles; an independent evaluator is deferred.
+- **Completion verification is opt-in policy** — the tools consult a mounted `ctx.goalVerifier` and nothing else; without one, the claiming caller remains authoritative for completion.
 - **No scheduling or direct human rendering** — these tools mutate state only; the same-session driver and `dsh-command-goal` are independent consumers of the same domain.
 - **Goal-round authority requires a driver** — the autonomous `complete`/`blocked` path is dormant unless a continuation driver admits goal-sourced user turns; mounting this tool package alone does not create them.
 - **Prompt registration is independent of filtering** — a scope may hide the tools while retaining their guidance unless the deployment scopes both registrations together.

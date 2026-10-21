@@ -181,6 +181,8 @@ interface ToolRestriction {
 
 `ctx.tools.execute()` accepts a caller-owned `ToolExecutionInput` with a required readonly `signal`, materializes its parsed JSON arguments once into a pipeline-owned `ToolExecution`, and runs that call through `tools/pre-execute` (the reorderable allow/deny/ask waterfall) → registered monotonic guards → `tools/execute` (around-dispatch wrappers) → `projectContent` → `tools/post-execute` (inspect/replace the result) → optional definition-owned `finalizeContent` → `tools/result` (the immutable authoritative outcome). Only the `tools/execute` view may replace the required signal. The outcome is a `ToolExecutionResult`.
 
+A `tools/execute` wrapper normally awaits the rest of the chain. A wrapper that hands the call to another owner instead returns a `detached` success result: the pipeline commits that wrapper's notice, freezes the execution, and stops observing the call. The detached body keeps running on the signal it was dispatched with, so its eventual outcome belongs to whoever took it and never reaches `tools/post-execute`, `finalizeContent`, or the session log. Nested `run_code` dispatches cannot be detached because the awaiting program owns their value.
+
 ```ts type-equiv
 /** Opaque call identity that permits correlation without exposing mutable execution state. */
 type ToolExecutionToken = symbol & { readonly [toolExecutionTokenBrand]: true }
@@ -358,6 +360,15 @@ interface ToolExecutionSuccess {
   readonly additionalContexts?: UserMessage[]
   /** The agent loop stops after committing this successful result batch. */
   readonly concludesTurn?: true
+  /**
+   * An around-dispatch wrapper moved this call out of the foreground (a
+   * background job, a hand-over) instead of awaiting it. `content` is then that
+   * wrapper's notice, not this tool's output: it is not validated against the
+   * tool's output declaration, and `value` is always `null` because no
+   * canonical value exists yet. Never persisted; a replay sees the notice as an
+   * ordinary successful result.
+   */
+  readonly detached?: true
 }
 ```
 

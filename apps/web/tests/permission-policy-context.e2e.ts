@@ -180,7 +180,8 @@ describe('web e2e: current sandbox policy reaches the model before tools', () =>
     expect(systems[0]).not.toContain('Approval prompts are disabled in this session')
 
     const contexts = runtimeContexts(sessionEvents)
-    expect(contexts).toHaveLength(4)
+    // The usage line adds one runtime-context snapshot when occupancy first crosses a reported step.
+    expect(contexts).toHaveLength(5)
     expect(contexts[0]).toContain('Current DSH file policy: read-only. Any available operation enforced by the DSH file sandbox cannot modify files in the standing mode.')
     expect(contexts[0]).toContain('Do not refuse a required modification from this policy alone')
     expect(contexts[0]).toContain('Approval policy: ask.')
@@ -192,6 +193,7 @@ describe('web e2e: current sandbox policy reaches the model before tools', () =>
     expect(contexts[2]).toContain('Approval policy: ask.')
     expect(contexts[2]).not.toContain('Approval prompts are disabled in this session')
     expect(contexts[3]).toContain('Current DSH file policy: read-only.')
+    expect(contexts[4]).toContain('Current DSH file policy: read-only.')
 
     const answers = assistantTexts(sessionEvents)
     expect(answers.length).toBeGreaterThanOrEqual(4)

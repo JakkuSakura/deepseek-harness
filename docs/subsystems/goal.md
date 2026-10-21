@@ -159,6 +159,64 @@ interface GoalChanged {
 }
 ```
 
+## Completion verification
+
+The domain records completion; it does not evaluate objectives. One optional certification service lets a policy plugin decide whether an autonomous completion claim is supported by the recorded evidence. `update_goal` consults a mounted `ctx.goalVerifier` before committing `action: complete` under goal-round authority; an uncertified claim fails the tool call and leaves the goal active, while a direct human turn completes the goal without consulting the service.
+
+The request carries the immutable session cut the claiming caller already holds, so the judge reads the same evidence the authority check accepted, and the goal view and ref pin the exact claimed revision.
+
+```ts type-equiv
+/**
+ * One autonomous completion claim awaiting certification.
+ *
+ * `events` is the immutable session cut the claiming caller already holds; the
+ * verifier renders evidence from it instead of reading session history, so a
+ * claim and the evidence it rests on describe the same instant.
+ */
+interface GoalVerificationRequest {
+  /** Owning live agent whose session logged the claim. */
+  readonly agent: Agent
+  /** Exact goal revision the claim cites, as returned by `ctx.goals.get()`. */
+  readonly goal: GoalView
+  /** Compare-and-set identity of the claimed revision. */
+  readonly ref: GoalRef
+  /** Immutable session event cut taken by the claiming caller. */
+  readonly events: readonly SessionEvent[]
+  /** Cancellation for the verification work. */
+  readonly signal?: AbortSignal
+}
+```
+
+```ts type-equiv
+/**
+ * Outcome of one certification attempt. A refusal names why, because the
+ * reason reaches the model as the failed tool call's message.
+ */
+interface GoalVerificationVerdict {
+  /** Whether the evidence establishes completion of the whole objective. */
+  readonly certified: boolean
+  /** One-sentence justification, or the refusal reason. */
+  readonly reason: string
+}
+```
+
+```ts type-equiv
+/**
+ * Completion-certification service. A composition mounts at most one verifier;
+ * `update_goal` consults it before recording an autonomous completion claim.
+ */
+interface GoalVerifierService {
+  /**
+   * Certify or refuse one autonomous completion claim.
+   * @param request - exact goal revision, immutable evidence cut, and cancellation.
+   * @returns the certification verdict; refusals keep the goal active.
+   * @throws when verification itself fails (provider error, unusable response);
+   * callers must treat that as a refusal rather than as certification.
+   */
+  verify(request: GoalVerificationRequest): Promise<GoalVerificationVerdict>
+}
+```
+
 ## Service behavior
 
 [`GoalService`](../../packages/goal/goal/src/index.ts) resolves creation defaults, reads strict replay from the optionally registered `goal` projection, enforces exact-live-agent identity and compare-and-set mutations, and emits contained `goal/changed` notifications. Its first dependent access fails if the projection registry or key is absent. The package [README](../../packages/goal/goal/README.md) defines the callable API and model-visible contract.
@@ -267,6 +325,25 @@ block(agent: Agent, ref: GoalRef, reason: GoalBlockReason): GoalView
 Types: [Agent](core.md)
 
 Source: [`packages/goal/goal/src/index.ts`](../../packages/goal/goal/src/index.ts)
+
+<a id="ctxgoalverifier--goalverifierservice"></a>
+
+### `ctx.goalVerifier` — `GoalVerifierService`
+
+Completion-certification service. A composition mounts at most one verifier; `update_goal` consults it before recording an autonomous completion claim.
+
+```ts cordis-catalog
+/**
+ * Certify or refuse one autonomous completion claim.
+ * @param request - exact goal revision, immutable evidence cut, and cancellation.
+ * @returns the certification verdict; refusals keep the goal active.
+ * @throws when verification itself fails (provider error, unusable response);
+ * callers must treat that as a refusal rather than as certification.
+ */
+verify(request: GoalVerificationRequest): Promise<GoalVerificationVerdict>
+```
+
+Source: [`packages/goal/goal/src/verification.ts`](../../packages/goal/goal/src/verification.ts)
 
 <a id="goal-events"></a>
 

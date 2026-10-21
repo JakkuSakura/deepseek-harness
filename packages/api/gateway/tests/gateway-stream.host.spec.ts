@@ -417,9 +417,17 @@ describe('Typert Remote streams', () => {
   })
 
   it('validates the WebSocket heartbeat timer range and the stream inbox bound', () => {
-    expect(TypertGatewayService.Config({})).toEqual({ websocketHeartbeatIntervalMs: 2_000, streamInboxBytes: 262_144 })
-    expect(TypertGatewayService.Config({ websocketHeartbeatIntervalMs: MAX_TIMER_DELAY_MS, streamInboxBytes: 1 }))
-      .toEqual({ websocketHeartbeatIntervalMs: MAX_TIMER_DELAY_MS, streamInboxBytes: 1 })
+    expect(TypertGatewayService.Config({})).toEqual({
+      websocketHeartbeatIntervalMs: 2_000,
+      streamInboxBytes: 262_144,
+    })
+    expect(TypertGatewayService.Config({
+      websocketHeartbeatIntervalMs: MAX_TIMER_DELAY_MS,
+      streamInboxBytes: 1,
+    })).toEqual({
+      websocketHeartbeatIntervalMs: MAX_TIMER_DELAY_MS,
+      streamInboxBytes: 1,
+    })
     for (const websocketHeartbeatIntervalMs of [0, 1.5, MAX_TIMER_DELAY_MS + 1]) {
       expect(() => TypertGatewayService.Config({ websocketHeartbeatIntervalMs })).toThrow()
     }

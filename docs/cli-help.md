@@ -173,22 +173,36 @@ Usage: dsh --profile web [options]
 Serve the DeepSeek Harness browser UI.
 
 Options:
-  --host <host>                  bind address: one concrete IPv4 or IPv6 literal
-                                 of a local interface; wildcard addresses are
-                                 rejected
-  --no-open                      do not open the Web UI in the default browser
-  --port <port>                  listen port; pass 0 to let the OS pick a free
-                                 one
-  --public-url <url>             advertise this HTTP(S) root in the printed,
-                                 opened, runtime-context, and DSH_WEB_URL forms;
-                                 grants no trust
-  --trusted-host <authority...>  extra authority the /api browser-trust fence
-                                 accepts (host or host:port; repeatable)
-  --tls-cert <file>              PEM server certificate chain; requires
-                                 --tls-key
-  --tls-key <file>               unencrypted PEM private key; requires
-                                 --tls-cert
-  -h, --help                     show this help
+  --host <host>                       bind address: one concrete IPv4 or IPv6
+                                      literal of a local interface; wildcard
+                                      addresses are rejected
+  --no-open                           do not open the Web UI in the default
+                                      browser
+  --port <port>                       listen port; pass 0 to let the OS pick a
+                                      free one
+  --public-url <url>                  advertise this HTTP(S) root in the
+                                      printed, opened, runtime-context, and
+                                      DSH_WEB_URL forms; grants no trust
+  --trusted-host <authority...>       extra authority the /api browser-trust
+                                      fence accepts (host or host:port;
+                                      repeatable)
+  --tls-cert <file>                   PEM server certificate chain; requires
+                                      --tls-key
+  --tls-key <file>                    unencrypted PEM private key; requires
+                                      --tls-cert
+  --oauth-issuer <url>                enable OpenID Connect sign-in through this
+                                      issuer; retires the launch token so only
+                                      that sign-in admits
+  --oauth-client-id <id>              registered OpenID Connect client id
+  --oauth-client-secret-ref <name>    environment variable holding the client
+                                      secret (omit for a public PKCE client)
+  --oauth-allow-email <email...>      exact email admitted by the OpenID Connect
+                                      gate (repeatable)
+  --oauth-allow-domain <domain...>    exact email domain admitted by the OpenID
+                                      Connect gate (repeatable)
+  --oauth-allow-subject <subject...>  exact provider subject admitted by the
+                                      OpenID Connect gate (repeatable)
+  -h, --help                          show this help
 
 Examples:
   dsh --profile web                          serve on the composed host and port
@@ -199,5 +213,9 @@ Examples:
                                              advertise a prefix-stripping HTTPS proxy entry and admit its authority
   dsh --profile web --tls-cert ./server-chain.pem --tls-key ./server-key.pem
                                              serve HTTPS with an existing certificate and key
+  dsh --profile web --public-url https://app.example/ --trusted-host app.example \
+    --oauth-issuer https://kc.example/realms/main --oauth-client-id dsh \
+    --oauth-client-secret-ref DSH_OAUTH_CLIENT_SECRET --oauth-allow-domain example.com
+                                             require single sign-on for a public deployment
 
 ```

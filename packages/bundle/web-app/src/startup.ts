@@ -39,6 +39,24 @@ export interface WebStartupValues {
   trustedHosts: string[]
   /** Server certificate chain and unencrypted private key supplied together. */
   tls?: TlsConfig
+  /** OpenID Connect gate settings; absent when the invocation did not enable sign-in. */
+  oauth?: WebOAuthValues
+}
+
+/** `--oauth-*` values for the OpenID Connect login gate. */
+export interface WebOAuthValues {
+  /** `--oauth-issuer`: provider issuer URL. */
+  issuer: string
+  /** `--oauth-client-id`: registered client id. */
+  clientId: string
+  /** `--oauth-client-secret-ref`: environment-variable name holding the client secret. */
+  clientSecretRef?: string
+  /** `--oauth-allow-email` entries, in argument order. */
+  allowedEmails: string[]
+  /** `--oauth-allow-domain` entries, in argument order. */
+  allowedDomains: string[]
+  /** `--oauth-allow-subject` entries, in argument order. */
+  allowedSubjects: string[]
 }
 
 /** The web flag family, as commander parsed it. */
@@ -50,6 +68,12 @@ interface WebOptions {
   trustedHost?: string[]
   tlsCert?: string
   tlsKey?: string
+  oauthIssuer?: string
+  oauthClientId?: string
+  oauthClientSecretRef?: string
+  oauthAllowEmail?: string[]
+  oauthAllowDomain?: string[]
+  oauthAllowSubject?: string[]
 }
 
 /**
@@ -68,6 +92,12 @@ function webCommand(): Command {
     .option('--trusted-host <authority...>', 'extra authority the /api browser-trust fence accepts (host or host:port; repeatable)')
     .option('--tls-cert <file>', 'PEM server certificate chain; requires --tls-key')
     .option('--tls-key <file>', 'unencrypted PEM private key; requires --tls-cert')
+    .option('--oauth-issuer <url>', 'enable OpenID Connect sign-in through this issuer; retires the launch token so only that sign-in admits')
+    .option('--oauth-client-id <id>', 'registered OpenID Connect client id')
+    .option('--oauth-client-secret-ref <name>', 'environment variable holding the client secret (omit for a public PKCE client)')
+    .option('--oauth-allow-email <email...>', 'exact email admitted by the OpenID Connect gate (repeatable)')
+    .option('--oauth-allow-domain <domain...>', 'exact email domain admitted by the OpenID Connect gate (repeatable)')
+    .option('--oauth-allow-subject <subject...>', 'exact provider subject admitted by the OpenID Connect gate (repeatable)')
     .addHelpText('after', `
 Examples:
   dsh --profile web                          serve on the composed host and port
@@ -78,6 +108,10 @@ Examples:
                                              advertise a prefix-stripping HTTPS proxy entry and admit its authority
   dsh --profile web --tls-cert ./server-chain.pem --tls-key ./server-key.pem
                                              serve HTTPS with an existing certificate and key
+  dsh --profile web --public-url https://app.example/ --trusted-host app.example \\
+    --oauth-issuer https://kc.example/realms/main --oauth-client-id dsh \\
+    --oauth-client-secret-ref DSH_OAUTH_CLIENT_SECRET --oauth-allow-domain example.com
+                                             require single sign-on for a public deployment
 `)
 }
 
@@ -111,6 +145,7 @@ export function apply(ctx: Context): void {
         program.error(`error: ${(error as Error).message}`)
       }
     }
+    const oauth = resolveOAuthOptions(options, message => program.error(`error: ${message}`))
     ctx.provide(WEB_STARTUP_SERVICE, {
       openBrowser: options.open,
       ...options.host !== undefined && { host: options.host },
@@ -118,7 +153,48 @@ export function apply(ctx: Context): void {
       ...options.publicUrl !== undefined && { publicUrl: options.publicUrl },
       ...tls !== undefined && { tls },
       trustedHosts: options.trustedHost ?? [],
+      ...oauth === undefined ? {} : { oauth },
     } satisfies WebStartupValues)
   })
   parseCmdline(ctx, program)
+}
+
+/** Validate the `--oauth-*` family as one all-or-nothing gate. */
+function resolveOAuthOptions(
+  options: WebOptions,
+  fail: (message: string) => never,
+): WebOAuthValues | undefined {
+  const emails = (options.oauthAllowEmail ?? []).map(value => value.trim()).filter(value => value !== '')
+  const domains = (options.oauthAllowDomain ?? []).map(value => value.trim()).filter(value => value !== '')
+  const subjects = (options.oauthAllowSubject ?? []).map(value => value.trim()).filter(value => value !== '')
+  const requested = options.oauthIssuer !== undefined
+    || options.oauthClientId !== undefined
+    || options.oauthClientSecretRef !== undefined
+    || emails.length > 0 || domains.length > 0 || subjects.length > 0
+  if (!requested) return undefined
+  if (options.oauthIssuer === undefined) fail('--oauth-issuer is required when any --oauth-* flag is present')
+  if (options.oauthClientId === undefined) fail('--oauth-client-id is required when any --oauth-* flag is present')
+  let issuer: URL
+  try {
+    issuer = new URL(options.oauthIssuer)
+  } catch {
+    fail(`--oauth-issuer must be an absolute HTTP(S) URL, got ${JSON.stringify(options.oauthIssuer)}`)
+  }
+  if (issuer.protocol !== 'http:' && issuer.protocol !== 'https:') {
+    fail('--oauth-issuer must be an absolute HTTP(S) URL')
+  }
+  if (options.oauthClientSecretRef !== undefined && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(options.oauthClientSecretRef)) {
+    fail('--oauth-client-secret-ref must be an environment-variable name')
+  }
+  if (emails.length === 0 && domains.length === 0 && subjects.length === 0) {
+    fail('at least one --oauth-allow-email, --oauth-allow-domain, or --oauth-allow-subject is required')
+  }
+  return {
+    issuer: issuer.href.replace(/\/$/u, ''),
+    clientId: options.oauthClientId,
+    ...options.oauthClientSecretRef === undefined ? {} : { clientSecretRef: options.oauthClientSecretRef },
+    allowedEmails: emails,
+    allowedDomains: domains,
+    allowedSubjects: subjects,
+  }
 }

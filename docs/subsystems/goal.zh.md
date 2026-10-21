@@ -159,6 +159,64 @@ interface GoalChanged {
 }
 ```
 
+## 完成核验
+
+该域记录完成状态，但不评估目标。一个可选的核验服务让策略插件判断自主完成声明是否得到已记录证据的支持。`update_goal` 在 goal 轮次授权下提交 `action: complete` 之前会咨询已挂载的 `ctx.goalVerifier`；未获认定时该工具调用失败且 goal 保持 active，而直接人类轮次会在不咨询该服务的情况下完成 goal。
+
+请求携带声明调用方本就持有的不可变会话切片，因此评审读取的正是授权检查所接受的同一批证据，goal 视图与 ref 则锁定确切声明的修订。
+
+```ts type-equiv
+/**
+ * One autonomous completion claim awaiting certification.
+ *
+ * `events` is the immutable session cut the claiming caller already holds; the
+ * verifier renders evidence from it instead of reading session history, so a
+ * claim and the evidence it rests on describe the same instant.
+ */
+interface GoalVerificationRequest {
+  /** Owning live agent whose session logged the claim. */
+  readonly agent: Agent
+  /** Exact goal revision the claim cites, as returned by `ctx.goals.get()`. */
+  readonly goal: GoalView
+  /** Compare-and-set identity of the claimed revision. */
+  readonly ref: GoalRef
+  /** Immutable session event cut taken by the claiming caller. */
+  readonly events: readonly SessionEvent[]
+  /** Cancellation for the verification work. */
+  readonly signal?: AbortSignal
+}
+```
+
+```ts type-equiv
+/**
+ * Outcome of one certification attempt. A refusal names why, because the
+ * reason reaches the model as the failed tool call's message.
+ */
+interface GoalVerificationVerdict {
+  /** Whether the evidence establishes completion of the whole objective. */
+  readonly certified: boolean
+  /** One-sentence justification, or the refusal reason. */
+  readonly reason: string
+}
+```
+
+```ts type-equiv
+/**
+ * Completion-certification service. A composition mounts at most one verifier;
+ * `update_goal` consults it before recording an autonomous completion claim.
+ */
+interface GoalVerifierService {
+  /**
+   * Certify or refuse one autonomous completion claim.
+   * @param request - exact goal revision, immutable evidence cut, and cancellation.
+   * @returns the certification verdict; refusals keep the goal active.
+   * @throws when verification itself fails (provider error, unusable response);
+   * callers must treat that as a refusal rather than as certification.
+   */
+  verify(request: GoalVerificationRequest): Promise<GoalVerificationVerdict>
+}
+```
+
 ## 服务行为
 
 [`GoalService`](../../packages/goal/goal/src/index.ts) 解析创建默认值、从可选注册的 `goal` 投影读取严格回放结果、校验传入的 agent（智能体）是注册表中的确切活跃实例、以比较并设置方式执行变更，并发出 `goal/changed` 通知；监听器故障会被隔离。注册表或 key 缺失时，第一次依赖它们的访问会失败。包 [README](../../packages/goal/goal/README.zh.md) 定义可调用 API 和面向模型的约定。
@@ -267,6 +325,25 @@ block(agent: Agent, ref: GoalRef, reason: GoalBlockReason): GoalView
 Types: [Agent](core.zh.md)
 
 Source: [`packages/goal/goal/src/index.ts`](../../packages/goal/goal/src/index.ts)
+
+<a id="ctxgoalverifier--goalverifierservice"></a>
+
+### `ctx.goalVerifier` — `GoalVerifierService`
+
+Completion-certification service. A composition mounts at most one verifier; `update_goal` consults it before recording an autonomous completion claim.
+
+```ts cordis-catalog
+/**
+ * Certify or refuse one autonomous completion claim.
+ * @param request - exact goal revision, immutable evidence cut, and cancellation.
+ * @returns the certification verdict; refusals keep the goal active.
+ * @throws when verification itself fails (provider error, unusable response);
+ * callers must treat that as a refusal rather than as certification.
+ */
+verify(request: GoalVerificationRequest): Promise<GoalVerificationVerdict>
+```
+
+Source: [`packages/goal/goal/src/verification.ts`](../../packages/goal/goal/src/verification.ts)
 
 <a id="goal-events"></a>
 

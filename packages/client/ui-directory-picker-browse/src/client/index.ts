@@ -16,6 +16,14 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { BrowseFlowInjected } from './flow.ts'
 import { BrowseDirectoryFlow } from './flow.ts'
 
+// The dialog itself is a module-table export so a client plugin that needs a
+// directory and cannot reach a declared directory-flow hole can drive the same
+// interaction this deployment composed instead of calling the native-only
+// `directoryPicker.pick` verb. Only the mounted surface's bundle carries it, so
+// a consumer requires it lazily, on the composition that serves `browse`.
+export { DirectoryBrowser } from './DirectoryBrowser.tsx'
+export type { DirectoryBrowserProps } from './DirectoryBrowser.tsx'
+
 /** Locale namespace owning the browser dialog's copy. */
 const LOCALE_NS = 'directory-browser'
 

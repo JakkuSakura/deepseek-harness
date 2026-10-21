@@ -45,6 +45,10 @@ kind: "package-reference"
 
 根路径与配置的 index 响应会在读取 HTML 前调用 `ctx.connection.authorizeIndex`。有效进程 token 会得到 303 重定向与持久浏览器 cookie；已有有效 cookie 时直接提供 index；其他 index 请求得到 Connection 所有的 401 响应。非 index 文件仍是公开静态资源。Token、cookie、过期时间与签名记录语义都归 Connection 所有。
 
+### 重复访问与条件请求
+
+每个响应都携带 `ETag`。`/assets/` 下由 Vite 内容哈希命名的文件以 `public, max-age=31536000, immutable` 提供；其他文件以 `no-cache` 加 `Last-Modified` 提供，使浏览器重新验证而不是重新下载。匹配的 `If-None-Match` 返回空 304，渲染后的索引也一样，其 ETag 覆盖当前注入行。这样在抖动或高延迟链路上，重连时不会重新获取未改动的 bundle 和 HTML。
+
 ### 可观察的失败
 
 遍历返回 403 而不是错误页。dist 根目录内不存在或不是文件的目标返回空 404，因此失效链接或拼错的 pathname 是显式失败，而不是静默的 SPA 回退。第二次占据席位会抛错，而席位无人占据时 webserver 返回 404——本插件的 fiber 被 dispose（资源释放）后，浏览器看到的就是该响应。
@@ -104,6 +108,7 @@ kind: "package-reference"
 这些限制说明某个资产类别何时尚未被覆盖。它们是当前包约束，不是任务积压。
 
 - **初始 MIME 表很精简**：它覆盖 Vite 输出的资产集合及实际交付的 PWA manifest；其他扩展名在相应资产类别发布前都会回退到 `application/octet-stream`。
+- **资源 ETag 由大小和修改时间生成**：若写入者改变字节却没有更新 `mtime`，会保留上一个验证器。构建输出和编辑器保存都会更新 `mtime`，这是有意用更便宜的方案代替每次请求都哈希资源。
 - **Pathname 路由是显式声明**——当前客户端从根目录或配置的 index 路径进入，没有 History API pathname 路由。新增一条需要显式服务器规则与真实组合覆盖，而不是对每次未命中做宽泛回退。
 
 <a id="dev-note"></a>

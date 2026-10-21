@@ -368,3 +368,92 @@ describe('BrowserAuth', () => {
       .rejects.toThrow(/safe timestamp range/u)
   })
 })
+
+describe('BrowserAuth external authenticators', () => {
+  it('accepts a registered credential and lets it own the login redirect', async () => {
+    const auth = await createAuth(new RecordCredentials())
+    const cookieRequest = request('/', '127.0.0.1:3080', { cookie: 'sso=ok' })
+    const dispose = auth.registerAuthenticator({
+      isAuthenticated: (candidate) => {
+        const headers = candidate.headers
+        const cookie = headers instanceof Headers ? headers.get('cookie') : headers.cookie
+        return cookie === 'sso=ok'
+      },
+      authorizeIndex: (_req, res) => {
+        res.writeHead(303, { 'location': '/auth/login?rd=%2F' })
+        res.end()
+        return true
+      },
+    })
+
+    expect(auth.isAuthenticated(cookieRequest)).toBe(true)
+    const redirect = response()
+    expect(auth.authorizeIndex(request('/'), redirect.value)).toBe(false)
+    expect(redirect.state.status).toBe(303)
+    expect(redirect.state.headers).toEqual({ 'location': '/auth/login?rd=%2F' })
+
+    const staleToken = response()
+    expect(auth.authorizeIndex(request('/?token=wrong', '127.0.0.1:3080', { cookie: 'sso=ok' }), staleToken.value)).toBe(false)
+    expect(staleToken.state).toMatchObject({ status: 303, headers: { location: './' } })
+
+    const missingIndex = response()
+    expect(auth.authorizeIndex({
+      method: 'POST',
+      url: '/',
+      headers: { host: '127.0.0.1:3080' },
+    }, missingIndex.value)).toBe(false)
+    expect(missingIndex.state).toMatchObject({ status: 303, headers: { location: '/auth/login?rd=%2F' } })
+
+    dispose()
+    expect(auth.isAuthenticated(cookieRequest)).toBe(false)
+    const denied = response()
+    expect(auth.authorizeIndex(request('/'), denied.value)).toBe(false)
+    expect(denied.state.status).toBe(401)
+
+    // An authenticator may decline to own the response and let a later one run.
+    auth.registerAuthenticator({ isAuthenticated: () => false, authorizeIndex: () => false })
+    const declined = response()
+    expect(auth.authorizeIndex(request('/'), declined.value)).toBe(false)
+    expect(declined.state.status).toBe(401)
+  })
+
+  it('serves the index when an external credential authenticates without a redirect handler', async () => {
+    const auth = await createAuth(new RecordCredentials())
+    auth.registerAuthenticator({ isAuthenticated: () => true })
+    expect(auth.authorizeIndex(request('/index.html'), response().value)).toBe(true)
+    expect(auth.isAuthenticated(request('/', '127.0.0.1:3080'))).toBe(true)
+  })
+})
+
+describe('BrowserAuth launch-token retirement', () => {
+  it('stops printing, minting, and accepting the token while an authenticator still admits', async () => {
+    const auth = await createAuth(new RecordCredentials())
+    const { cookie } = exchange(auth)
+    expect(auth.authenticatedUrl('http://127.0.0.1:3080')).toContain('token=')
+
+    const restore = auth.retireLaunchToken()
+
+    expect(auth.authenticatedUrl('http://127.0.0.1:3080')).toBe('http://127.0.0.1:3080/')
+    expect(auth.isAuthenticated(request('/', '127.0.0.1:3080', { cookie }))).toBe(false)
+    const denied = response()
+    expect(auth.authorizeIndex(request('/?token=anything', '127.0.0.1:3080'), denied.value)).toBe(false)
+    expect(denied.state.status).toBe(401)
+
+    // The deployment's gate owns a request that still carries a retired token.
+    auth.registerAuthenticator({
+      isAuthenticated: () => false,
+      authorizeIndex: (_req, res) => {
+        res.writeHead(303, { 'location': '/auth/login?rd=%2F' })
+        res.end()
+        return true
+      },
+    })
+    const gateOwned = response()
+    expect(auth.authorizeIndex(request('/?token=anything', '127.0.0.1:3080'), gateOwned.value)).toBe(false)
+    expect(gateOwned.state).toMatchObject({ status: 303, headers: { location: '/auth/login?rd=%2F' } })
+
+    restore()
+    expect(auth.authenticatedUrl('http://127.0.0.1:3080')).toContain('token=')
+    expect(auth.isAuthenticated(request('/', '127.0.0.1:3080', { cookie }))).toBe(true)
+  })
+})

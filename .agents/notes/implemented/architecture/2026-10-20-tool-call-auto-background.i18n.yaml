@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-20-tool-call-auto-background.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-20-tool-call-auto-background.md
+/agent-note-detached-tool-results-and-the-foreground-to-background-hand-over:
+  en: 05571479b7f4a9a8
+  zh: 892b1ec1c5c3f29d
+/agent-note-detached-tool-results-and-the-foreground-to-background-hand-over/problem:
+  en: a138a85fa101d016
+  zh: 2e4242c2dc7d70fa
+/agent-note-detached-tool-results-and-the-foreground-to-background-hand-over/decision:
+  en: 726ec3820ae1a408
+  zh: 4c7b342df59586d6
+/agent-note-detached-tool-results-and-the-foreground-to-background-hand-over/consequences:
+  en: 7b0fc867d813b5c1
+  zh: 801c06e79832eb1d
+/agent-note-detached-tool-results-and-the-foreground-to-background-hand-over/testing:
+  en: 718c442643f04b78
+  zh: 29d92b37cfe669c3
+/agent-note-detached-tool-results-and-the-foreground-to-background-hand-over/alternatives-considered:
+  en: 711a495f0dd89a71
+  zh: a60fe445d7a0976e

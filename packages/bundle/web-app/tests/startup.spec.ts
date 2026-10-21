@@ -142,6 +142,7 @@ describe('web command-line provider', () => {
     expect(observed.out).toContain('--no-open')
     expect(observed.out).toContain('--public-url')
     expect(observed.out).toContain('--trusted-host')
+    expect(observed.out).toContain('--oauth-issuer')
     expect(values).toBeUndefined()
     expect(observed.readerConfig).toBeUndefined()
     expect(observed.exits).toEqual([0])
@@ -181,6 +182,68 @@ describe('web command-line provider', () => {
     expect(values).toBeUndefined()
     expect(observed.readerConfig).toBeUndefined()
     expect(observed.exits).toEqual([1])
+  })
+
+  it('publishes the OpenID Connect flag family with normalized whitelist entries', async () => {
+    const { values, observed } = await bootProvider([
+      '--oauth-issuer', 'https://kc.example/realms/main/',
+      '--oauth-client-id', 'dsh',
+      '--oauth-client-secret-ref', 'DSH_OAUTH_CLIENT_SECRET',
+      '--oauth-allow-email', ' person@example.com ', 'second@example.com',
+      '--oauth-allow-domain', 'corp.example',
+      '--oauth-allow-subject', 'subject-1',
+    ])
+    expect(values).toEqual({
+      openBrowser: true,
+      trustedHosts: [],
+      oauth: {
+        issuer: 'https://kc.example/realms/main',
+        clientId: 'dsh',
+        clientSecretRef: 'DSH_OAUTH_CLIENT_SECRET',
+        allowedEmails: ['person@example.com', 'second@example.com'],
+        allowedDomains: ['corp.example'],
+        allowedSubjects: ['subject-1'],
+      },
+    })
+    expect(observed.exits).toEqual([])
+  })
+
+  it('accepts a public PKCE client without a secret reference', async () => {
+    const { values, observed } = await bootProvider([
+      '--oauth-issuer', 'https://kc.example/realms/main',
+      '--oauth-client-id', 'dsh',
+      '--oauth-allow-subject', 'subject-1',
+    ])
+    expect(values).toEqual({
+      openBrowser: true,
+      trustedHosts: [],
+      oauth: {
+        issuer: 'https://kc.example/realms/main',
+        clientId: 'dsh',
+        allowedEmails: [],
+        allowedDomains: [],
+        allowedSubjects: ['subject-1'],
+      },
+    })
+    expect(observed.exits).toEqual([])
+  })
+
+  it('rejects an incomplete or empty OpenID Connect flag family before activation', async () => {
+    const cases: ReadonlyArray<readonly [string[], RegExp]> = [
+      [['--oauth-client-id', 'dsh'], /--oauth-issuer is required/u],
+      [['--oauth-issuer', 'https://kc.example'], /--oauth-client-id is required/u],
+      [['--oauth-issuer', 'not a url', '--oauth-client-id', 'dsh', '--oauth-allow-email', 'a@b.c'], /--oauth-issuer must be an absolute/u],
+      [['--oauth-issuer', 'ftp://kc.example', '--oauth-client-id', 'dsh', '--oauth-allow-email', 'a@b.c'], /--oauth-issuer must be an absolute/u],
+      [['--oauth-issuer', 'https://kc.example', '--oauth-client-id', 'dsh', '--oauth-client-secret-ref', '1BAD', '--oauth-allow-email', 'a@b.c'], /--oauth-client-secret-ref/u],
+      [['--oauth-issuer', 'https://kc.example', '--oauth-client-id', 'dsh', '--oauth-allow-email', ' '], /at least one --oauth-allow-email/u],
+    ]
+    for (const [args, pattern] of cases) {
+      const { values, observed } = await bootProvider(args)
+      expect(observed.out).toMatch(pattern)
+      expect(values).toBeUndefined()
+      expect(observed.exits).toEqual([1])
+      await new Promise<void>((resolve) => { setImmediate(resolve) })
+    }
   })
 
   it('rejects a malformed --public-url before the consumer activates', async () => {

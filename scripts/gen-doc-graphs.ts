@@ -659,6 +659,15 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Folds revisioned objective state from the session log and keeps live continuation activation process-local.',
   },
   {
+    key: 'goalVerifier',
+    pkg: 'goal-verifier-llm',
+    title: 'Independent goal-completion certification',
+    mode: 'seam',
+    implementations: ['goal-verifier-llm'],
+    consumers: ['tool-goal'],
+    note: 'Judges recorded session evidence against the objective before an autonomous completion claim is recorded.',
+  },
+  {
     key: 'ssh',
     pkg: 'ssh',
     title: 'POSIX SSH connection owner',

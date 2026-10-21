@@ -26,9 +26,21 @@ dsh --profile web --public-url https://app.example/ui/ --trusted-host app.exampl
 
 无论是公告 URL 还是栅栏都不保护监听端口本身，因此请把端口限制在可信代理或网络内。
 
+## 要求单点登录
+
+启动令牌认证的是一个浏览器，而不是一个人，因此由多人共用的部署应改用 [OpenID Connect 闸门](../../../packages/host/oauth/README.zh.md)：
+
+```sh
+dsh --profile web --public-url https://app.example/ui/ --trusted-host app.example \
+  --oauth-issuer https://kc.example/realms/main --oauth-client-id dsh \
+  --oauth-client-secret-ref DSH_OAUTH_CLIENT_SECRET --oauth-allow-domain example.com
+```
+
+闸门会把未登录的浏览器重定向到提供方，只允许白名单中的身份，并签发自己的 authority 绑定 Cookie，索引、`/api` 和 WebSocket 升级都会接受它。启用闸门即注销启动令牌：打印的 URL 不再携带令牌，过期的带令牌 URL 会被重定向到登录页，因此提供方是唯一的入口。把 `https://app.example/ui/auth/callback` 注册为客户端的重定向 URI，并确保代理转发 `X-Forwarded-Proto: https`，使回调 URL 和 Cookie 的 `Secure` 标志与浏览器侧源一致。挂载前缀像其他路由一样会被剥离：`/ui/auth/*` 到达监听器时是 `/auth/*`。
+
 ## 保护外部链路
 
-可以在代理处、监听器本身或两者上终止 TLS；`--public-url` 仍只是公告。面向浏览器的 `http://` 根会明文暴露启动 token。`https://` 代理根保护浏览器到代理这一段；代理与监听器之间是否加密取决于监听器的 TLS 配置。
+可以在代理处、监听器本身或两者上终止 TLS；`--public-url` 仍只是公告。面向浏览器的 `http://` 根会明文暴露启动 token。`https://` 代理根保护浏览器到代理这一段；代理与监听器之间是否加密取决于监听器的 TLS 配置。没有登录闸门时，打印的 URL 携带进程凭据；`--oauth-issuer` 会注销该令牌。
 
 要在监听器上终止 TLS，请传入 `--tls-cert` 与 `--tls-key`，两者各是相对进程工作目录解析的路径：证书文件包含完整证书链，密钥文件为不带口令的 PEM 私钥。DSH 从不获取、续期或监视证书，且载体只读取一次文件，因此更换文件后需重新加载监听器或重启进程；文件缺失或无效时启动失败，绝不回退到 HTTP。浏览器使用自己的信任库与名称校验，因此证书必须覆盖你所访问的 hostname 或 IP。默认端口仍为 3080。原生 TLS 不需要代理，但代理部署与 `--public-url` 仍分别受支持。TLS 监听器会给会话 cookie 加上 `Secure`；公开部署的浏览器侧链路应保持 HTTPS，才能让浏览器回传这些 cookie。
 

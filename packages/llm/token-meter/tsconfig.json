@@ -27,6 +27,12 @@
       "path": "../../core/session"
     },
     {
+      "path": "../../core/system-prompt"
+    },
+    {
+      "path": "../../core/agent"
+    },
+    {
       "path": "../../compaction/compaction"
     },
     {

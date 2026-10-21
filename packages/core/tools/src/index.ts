@@ -580,6 +580,15 @@ export interface ToolExecutionSuccess {
   readonly additionalContexts?: UserMessage[]
   /** The agent loop stops after committing this successful result batch. */
   readonly concludesTurn?: true
+  /**
+   * An around-dispatch wrapper moved this call out of the foreground (a
+   * background job, a hand-over) instead of awaiting it. `content` is then that
+   * wrapper's notice, not this tool's output: it is not validated against the
+   * tool's output declaration, and `value` is always `null` because no
+   * canonical value exists yet. Never persisted; a replay sees the notice as an
+   * ordinary successful result.
+   */
+  readonly detached?: true
 }
 
 /** Failed canonical tool execution; failures never carry a successful value. */
@@ -1595,7 +1604,10 @@ export class ToolRuntime extends Service {
       return toolErrorResult(error)
     } finally {
       fused.dispose()
-      exec.signal = wrapperSignal
+      // A wrapper that detached this call has already ended the foreground
+      // pipeline, which froze `exec` for `tools/result` observers; the restore
+      // has no reader left and would throw on the frozen property.
+      if (!Object.isFrozen(exec)) exec.signal = wrapperSignal
     }
   }
 
@@ -1883,6 +1895,18 @@ export class ToolRuntime extends Service {
     }
     const tool = this.resolveExecution(exec.name, exec.agent, exec.parent !== undefined)
     if (tool === undefined) throw new ToolNotFoundError(exec.name)
+    // A wrapper that moved the call elsewhere owns the notice, so there is no
+    // canonical value to validate against this tool's output declaration.
+    if (result.detached === true) {
+      return this.markCanonical(exec, {
+        isError: false,
+        detached: true,
+        value: null,
+        content: result.content,
+        ...result.meta !== undefined ? { meta: result.meta } : {},
+        ...result.additionalContexts !== undefined ? { additionalContexts: result.additionalContexts } : {},
+      })
+    }
     const normalized = this.createSuccessResult(exec, tool, result.value)
     return this.markCanonical(exec, {
       ...normalized,
@@ -1900,12 +1924,13 @@ export class ToolRuntime extends Service {
     if (result.isError) {
       return materializePresentation({ isError: true as const, error: result.error, ...presentation })
     }
-    const detached = materializePresentation({
+    const materialized = materializePresentation({
       isError: false as const,
       ...presentation,
       ...result.concludesTurn === true ? { concludesTurn: true as const } : {},
+      ...result.detached === true ? { detached: true as const } : {},
     })
-    return deepFreeze({ ...detached, value: result.value })
+    return deepFreeze({ ...materialized, value: result.value })
   }
 }
 

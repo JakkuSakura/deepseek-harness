@@ -435,7 +435,7 @@ export type Config = LocalConfig
 ## `@deepseek-ai/dsh-client-connection`
 
 - `inject`: `credentials`
-- `source`: [`packages/client/connection/src/index.ts:96`](../packages/client/connection/src/index.ts)
+- `source`: [`packages/client/connection/src/index.ts:97`](../packages/client/connection/src/index.ts)
 
 ```ts config-catalog
 /** Browser authentication, request limits, and connection recovery configuration. */
@@ -1418,7 +1418,7 @@ export type Config = LocalConfig
 ## `@deepseek-ai/dsh-goal`
 
 - `inject`: `agents` · `sessionProjections`
-- `source`: [`packages/goal/goal/src/index.ts:172`](../packages/goal/goal/src/index.ts)
+- `source`: [`packages/goal/goal/src/index.ts:176`](../packages/goal/goal/src/index.ts)
 
 ```ts config-catalog
 /** Deployment defaults for goal creation. */
@@ -1428,6 +1428,29 @@ export interface Config {
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-goal -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-goal-verifier-llm -->
+<a id="deepseek-aidsh-goal-verifier-llm"></a>
+
+## `@deepseek-ai/dsh-goal-verifier-llm`
+
+- `inject`: `llm`
+- `source`: [`packages/goal/goal-verifier-llm/src/index.ts:25`](../packages/goal/goal-verifier-llm/src/index.ts)
+
+```ts config-catalog
+/** Deployment choices for the judging provider and its request bounds. */
+export interface Config {
+  /** Registered provider route the judge call uses. */
+  provider: string
+  /** Exact model id the judge call uses. */
+  model: string
+  /** Output-token cap for one judge reply. */
+  maxTokens?: number
+  /** Maximum evidence characters sent to the judge. */
+  maxEvidenceChars?: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-goal-verifier-llm -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-headless -->
 <a id="deepseek-aidsh-headless"></a>
@@ -1562,7 +1585,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-host-frontend-static`
 
 - `inject`: `webServer` · `connection`
-- `source`: [`packages/host/frontend-static/src/index.ts:30`](../packages/host/frontend-static/src/index.ts)
+- `source`: [`packages/host/frontend-static/src/index.ts:31`](../packages/host/frontend-static/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: the dist anchor. */
@@ -1572,6 +1595,51 @@ export interface Config {
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-host-frontend-static -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-host-oauth -->
+<a id="deepseek-aidsh-host-oauth"></a>
+
+## `@deepseek-ai/dsh-host-oauth`
+
+- `inject`: `webServer` · `connection` · `credentials`
+- `source`: [`packages/host/oauth/src/index.ts:37`](../packages/host/oauth/src/index.ts)
+
+```ts config-catalog
+/** OpenID Connect login gate configuration. */
+export interface Config {
+  /** Provider issuer URL, e.g. `https://kc.example.com/realms/main`; absent disables the gate. */
+  issuer?: string
+  /** Registered client id; required when {@link issuer} is present. */
+  clientId?: string
+  /** Credential reference holding the client secret; required for confidential clients. */
+  clientSecretRef?: string
+  /** Requested scopes. @default ['openid', 'email', 'profile'] */
+  scopes?: string[]
+  /** Exact email addresses admitted. */
+  allowedEmails?: string[]
+  /** Exact email domains admitted, without a leading `@`. */
+  allowedDomains?: string[]
+  /** Exact provider subject identifiers admitted. */
+  allowedSubjects?: string[]
+  /** Absolute session lifetime in days. @default 30 */
+  sessionMaxAgeDays?: number
+  /** Advertised HTTP(S) application root used in the callback URL behind a prefix-stripping proxy. */
+  publicUrl?: string
+  /** Base session cookie name. @default 'dsh-oauth' */
+  cookieName?: string
+  /** Login route. @default '/auth/login' */
+  loginPath?: string
+  /** Provider callback route. @default '/auth/callback' */
+  callbackPath?: string
+  /** Logout route. @default '/auth/logout' */
+  logoutPath?: string
+  /** Session probe route. @default '/auth/session' */
+  sessionPath?: string
+  /** Deadline for each provider HTTP call in milliseconds. @default 10000 */
+  requestTimeoutMs?: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-host-oauth -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-host-open-in-app -->
 <a id="deepseek-aidsh-host-open-in-app"></a>
@@ -3541,7 +3609,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-system-prompt`
 
-- `source`: [`packages/core/system-prompt/src/index.ts:258`](../packages/core/system-prompt/src/index.ts)
+- `source`: [`packages/core/system-prompt/src/index.ts:259`](../packages/core/system-prompt/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: the deployment-authored fragment of the system prompt (see {@link Config.personaPrefix} for its contract). */
@@ -3751,6 +3819,31 @@ export interface Config {
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-bash-persistent -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-call-auto-background -->
+<a id="deepseek-aidsh-tool-call-auto-background"></a>
+
+## `@deepseek-ai/dsh-tool-call-auto-background`
+
+- `inject`: `tools` · `jobs`
+- `source`: [`packages/guard/auto-background/src/index.ts:62`](../packages/guard/auto-background/src/index.ts)
+
+```ts config-catalog
+/**
+ * Which calls may move to the background and after how long. Every deployment-
+ * varying choice is a field here; a composition that needs different tools
+ * overrides `include` or `exclude` rather than editing the plugin.
+ */
+export interface Config {
+  /** Milliseconds a call may run before the turn stops waiting (default 5000). */
+  backgroundAfterMs?: number
+  /** Tool names eligible for the hand-over; empty means every tool (default `[]`). */
+  include?: string[]
+  /** Tool names never moved to the background (default: the job-control and human-blocking tools). */
+  exclude?: string[]
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-call-auto-background -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-fs -->
 <a id="deepseek-aidsh-tool-fs"></a>
@@ -4220,7 +4313,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-tools`
 
 - `inject`: `systemPrompt`
-- `source`: [`packages/core/tools/src/index.ts:675`](../packages/core/tools/src/index.ts)
+- `source`: [`packages/core/tools/src/index.ts:684`](../packages/core/tools/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: how the registered tools are presented to the model. */

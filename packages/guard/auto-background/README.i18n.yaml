@@ -1,0 +1,58 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/guard/auto-background/README.md
+/:
+  en: 556d470e95ec30a5
+  zh: 279841d625e3a8ba
+/deepseek-ai-dsh-tool-call-auto-background:
+  en: 36d62321972b8a20
+  zh: 5c8a96a3eedd3238
+/deepseek-ai-dsh-tool-call-auto-background/summary:
+  en: c4eafeec35170181
+  zh: 00fc73daccba1ae7
+/deepseek-ai-dsh-tool-call-auto-background/table-of-contents:
+  en: ff457dff59dc3829
+  zh: 364ae1cb53c107a0
+/deepseek-ai-dsh-tool-call-auto-background/use-this-package:
+  en: 66c099b0df84ffce
+  zh: cc241bc8e2673220
+/deepseek-ai-dsh-tool-call-auto-background/use-this-package/when-to-choose-it:
+  en: 3396bbf5b1411d20
+  zh: 139504680cb60acb
+/deepseek-ai-dsh-tool-call-auto-background/use-this-package/setting-it-up:
+  en: 5853d4a00df7708f
+  zh: c97f98105c367be8
+/deepseek-ai-dsh-tool-call-auto-background/use-this-package/what-you-get:
+  en: 668f1c8823880805
+  zh: 631061c959abbdfe
+/deepseek-ai-dsh-tool-call-auto-background/understand-the-implementation:
+  en: 1ff3d40384640b5e
+  zh: 50192f3bb1daef04
+/deepseek-ai-dsh-tool-call-auto-background/understand-the-implementation/source-map:
+  en: 71fb3b3e602630a5
+  zh: 3f861006faed0f3a
+/deepseek-ai-dsh-tool-call-auto-background/further-exploration:
+  en: eaf250633507a4d1
+  zh: 10bcd7e1d3d3def8
+/deepseek-ai-dsh-tool-call-auto-background/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-tool-call-auto-background/model-experience/conditional-tool-result:
+  en: 7877631ca859b191
+  zh: 7877631ca859b191
+/deepseek-ai-dsh-tool-call-auto-background/model-experience/conditional-tool-result/what-the-model-sees:
+  en: 1073f587d332ff6e
+  zh: 7ae5dfbcdd6198cd
+/deepseek-ai-dsh-tool-call-auto-background/model-experience/conditional-tool-result/token-effect:
+  en: 21b32c6c0927a279
+  zh: 3c49f858f2b7dc21
+/deepseek-ai-dsh-tool-call-auto-background/model-experience/conditional-tool-result/kv-cache-effect:
+  en: 2c0b940362cf2c19
+  zh: b32adf4ccf65f197
+/deepseek-ai-dsh-tool-call-auto-background/known-limitations-and-deferred-work:
+  en: aaaa50b3c54522b0
+  zh: d32533c0ff131ef3
+/deepseek-ai-dsh-tool-call-auto-background/known-limitations-and-deferred-work/dev-note:
+  en: 02560fb6834e4993
+  zh: c2d1e74e5f0731a7

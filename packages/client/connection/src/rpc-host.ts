@@ -16,6 +16,7 @@ import { API_PATH } from './api-path.ts'
 import type { BrowserAuth } from './browser-auth.ts'
 import { Peer } from './peer.ts'
 import type {
+  BrowserSessionAuthenticator,
   PeerAdmission,
   ConnectionAdmission,
   ConnectionIndexRequest,
@@ -192,6 +193,16 @@ export class HostConnectionService extends Service implements HostConnectionHand
    */
   authorizeIndex(request: ConnectionIndexRequest, response: ConnectionIndexResponse): boolean {
     return this.browserAuth.authorizeIndex(request, response, this.ctx.get('webServer')?.protocol === 'https:')
+  }
+
+  /** Accept one external browser-session credential for `/api` and index authentication. */
+  registerBrowserAuthenticator(authenticator: BrowserSessionAuthenticator): () => void {
+    return this.browserAuth.registerAuthenticator(authenticator)
+  }
+
+  /** Withdraw the process launch token, leaving registered authenticators as the only way in. */
+  retireLaunchToken(): () => void {
+    return this.browserAuth.retireLaunchToken()
   }
 
   /** Add this process's launch token to the clean application URL. */

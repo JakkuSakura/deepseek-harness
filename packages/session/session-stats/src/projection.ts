@@ -28,6 +28,9 @@ import { assistantStreamFirstTokenTime } from '@deepseek-ai/dsh-llm'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 
 
+/** How far back the decode figures look, in milliseconds. */
+const DECODE_WINDOW_MS = 15_000
+
 /** Accumulated whole-log figures (the view is exactly these totals). */
 interface SessionStatsTotals {
   /** Distinct turns with at least one closed step so far. */
@@ -42,10 +45,22 @@ interface SessionStatsTotals {
   ttftMs: number
   /** Steps carrying a recorded first token. */
   ttftSteps: number
-  /** Summed decode wall time over usage-reporting steps, ms. */
+  /** Decode wall time over the steps inside the window, ms. */
   decodeMs: number
-  /** Summed provider output tokens over the same steps. */
+  /** Provider output tokens over the same steps. */
   decodeTokens: number
+  /** The recorded steps those two figures are summed from, oldest first. */
+  decodeSteps: DecodeStep[]
+}
+
+/** One step's decode contribution, kept so it can age out of the window. */
+export interface DecodeStep {
+  /** When the step finished, in epoch milliseconds. */
+  readonly time: number
+  /** Decode wall time for the step, ms. */
+  readonly ms: number
+  /** Provider output tokens for the step. */
+  readonly tokens: number
 }
 
 /**
@@ -95,6 +110,15 @@ const sessionStatsStateSchema = sessionStatsSchema.extend({
     firstTokenTime: z.number().nonnegative().nullable(),
   }).nullable(),
   pendingCalls: z.record(z.string(), z.number().nonnegative()),
+  // The window's record. It belongs to the state rather than the view: the view reports
+  // the two figures, and this is what they are summed from. Defaulted so a cache row
+  // written before the window existed loads as an empty window — which is what it is,
+  // since no step in it can be older than the window and still count.
+  decodeSteps: z.array(z.object({
+    time: z.number().nonnegative(),
+    ms: z.number().nonnegative(),
+    tokens: z.number().nonnegative(),
+  })).default([]),
 })
 
 /**
@@ -123,6 +147,7 @@ export const sessionStatsProjectionDefinition = {
     ttftSteps: 0,
     decodeMs: 0,
     decodeTokens: 0,
+    decodeSteps: [],
     lastTurn: null,
     openStep: null,
     pendingCalls: {},
@@ -158,8 +183,15 @@ export const sessionStatsProjectionDefinition = {
           next.ttftSteps += 1
           const outputTokens = usageOutputTokens(event.data.usage)
           if (outputTokens !== null) {
-            next.decodeMs += Math.max(0, event.time - firstToken)
-            next.decodeTokens += outputTokens
+            // A window, not a lifetime average: the figure is read as a live speed, and an
+            // average over a whole Session barely moves while a reader watches it.
+            const steps = [
+              ...state.decodeSteps,
+              { time: event.time, ms: Math.max(0, event.time - firstToken), tokens: outputTokens },
+            ].filter(step => step.time >= event.time - DECODE_WINDOW_MS)
+            next.decodeSteps = steps
+            next.decodeMs = steps.reduce((total, step) => total + step.ms, 0)
+            next.decodeTokens = steps.reduce((total, step) => total + step.tokens, 0)
           }
         }
         return next

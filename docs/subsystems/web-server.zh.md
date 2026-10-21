@@ -149,6 +149,22 @@ admitConnection(request: ConnectionTrustRequest): ConnectionAdmission
 authorizeIndex(request: ConnectionIndexRequest, response: ConnectionIndexResponse): boolean
 
 /**
+ * Accept one external browser-session credential for `/api` and index
+ * authentication, and let it own the login redirect for index requests.
+ * @param authenticator - deployment-owned login gate credential.
+ * @returns disposer withdrawing the authenticator.
+ */
+registerBrowserAuthenticator(authenticator: BrowserSessionAuthenticator): () => void
+
+/**
+ * Withdraw the process launch token from admission, leaving registered
+ * browser-session authenticators as the only way in. {@link authenticatedUrl}
+ * then stops carrying a token.
+ * @returns disposer re-admitting the launch token.
+ */
+retireLaunchToken(): () => void
+
+/**
  * Add the fresh process token to an ordinary Web application URL.
  * @param baseUrl - clean application URL whose authority and mount are preserved.
  * @returns tokenized URL for initial login; a mount proxy strips its prefix before {@link authorizeIndex}.

@@ -13,7 +13,8 @@
  */
 
 import type { ServerResponse } from 'node:http'
-import { readFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { readFile, stat } from 'node:fs/promises'
 import { dirname, extname, join, normalize, resolve, sep } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
@@ -58,6 +59,53 @@ const STATIC_MISS_CODES: ReadonlySet<string | undefined> = new Set([
   'ENOTDIR',
 ])
 
+/** Vite content-hashed asset names are safe to cache forever. */
+const HASHED_ASSET = /\/assets\/[^/]+-[A-Za-z0-9_-]{8,}\.[A-Za-z0-9]+$/u
+const IMMUTABLE_CACHE = 'public, max-age=31536000, immutable'
+const REVALIDATE_CACHE = 'no-cache'
+
+/** Request facts that decide conditional and bodyless responses. */
+export interface StaticResponseOptions {
+  /** `If-None-Match` request header, when the client supplies one. */
+  readonly ifNoneMatch?: string | undefined
+  /** Suppress the body for a HEAD request. */
+  readonly head?: boolean
+}
+
+interface ETagEntry {
+  readonly mtimeMs: number
+  readonly size: number
+  readonly etag: string
+}
+
+/** Stat-derived ETags per absolute path; a rebuilt file's mtime replaces its entry. */
+const etags = new Map<string, ETagEntry>()
+
+function etagFor(target: string, mtimeMs: number, size: number): string {
+  const cached = etags.get(target)
+  if (cached !== undefined && cached.mtimeMs === mtimeMs && cached.size === size) return cached.etag
+  const etag = `"${size.toString(16)}-${Math.trunc(mtimeMs).toString(16)}"`
+  etags.set(target, { mtimeMs, size, etag })
+  return etag
+}
+
+function contentETag(body: string): string {
+  return `"${createHash('sha1').update(body).digest('base64url')}"`
+}
+
+function matchesETag(ifNoneMatch: string | undefined, etag: string): boolean {
+  if (ifNoneMatch === undefined) return false
+  return ifNoneMatch.split(',').some((candidate) => {
+    const value = candidate.trim()
+    return value === '*' || value === etag || value === `W/${etag}`
+  })
+}
+
+function writeNotModified(res: ServerResponse, etag: string, cacheControl: string): void {
+  res.writeHead(304, { etag, 'cache-control': cacheControl })
+  res.end()
+}
+
 /**
  * Serve one GET/HEAD static request from the dist root.
  * @param pathname - decoded URL pathname of the request.
@@ -67,11 +115,13 @@ const STATIC_MISS_CODES: ReadonlySet<string | undefined> = new Set([
  * @param authorizeIndex - authenticates an index response before its bytes are read.
  * @param renderIndex - produces the index.html body (structured injection
  * rendering) for the dist root and configured index path.
+ * @param options - conditional-request and HEAD facts.
  */
 export async function serveStatic(
   pathname: string, res: ServerResponse, distRoot: string, distIndex: string,
   authorizeIndex: () => boolean,
   renderIndex: () => Promise<string>,
+  options: StaticResponseOptions = {},
 ): Promise<void> {
   const target = resolve(normalize(join(distRoot, pathname)))
   // Traversal rejection: the target must be distRoot itself (`/`) or stay under
@@ -82,17 +132,35 @@ export async function serveStatic(
     res.end()
     return
   }
-  let body: string | Buffer
-  let type: string
-  try {
-    if (target === distRoot || target === distIndex) {
-      if (!authorizeIndex()) return
+  if (target === distRoot || target === distIndex) {
+    if (!authorizeIndex()) return
+    let body: string
+    try {
       body = await renderIndex()
-      type = HTML_MIME
-    } else {
-      body = await readFile(target)
-      type = MIME[extname(target)] ?? 'application/octet-stream'
+    } catch (error) {
+      if (!STATIC_MISS_CODES.has((error as NodeJS.ErrnoException).code)) throw error
+      res.writeHead(404)
+      res.end()
+      return
     }
+    const etag = contentETag(body)
+    if (matchesETag(options.ifNoneMatch, etag)) {
+      writeNotModified(res, etag, REVALIDATE_CACHE)
+      return
+    }
+    res.writeHead(200, {
+      'content-type': HTML_MIME,
+      'cache-control': REVALIDATE_CACHE,
+      etag,
+    })
+    res.end(options.head === true ? undefined : body)
+    return
+  }
+  let body: Buffer
+  let metadata: Awaited<ReturnType<typeof stat>>
+  try {
+    metadata = await stat(target)
+    body = await readFile(target)
   } catch (error) {
     // Only absent or non-file targets are 404; other filesystem failures reach
     // the webserver's request-failure handling.
@@ -101,8 +169,20 @@ export async function serveStatic(
     res.end()
     return
   }
-  res.writeHead(200, { 'content-type': type })
-  res.end(body)
+  const type = MIME[extname(target)] ?? 'application/octet-stream'
+  const cacheControl = HASHED_ASSET.test(target.split(sep).join('/')) ? IMMUTABLE_CACHE : REVALIDATE_CACHE
+  const etag = etagFor(target, metadata.mtimeMs, metadata.size)
+  if (matchesETag(options.ifNoneMatch, etag)) {
+    writeNotModified(res, etag, cacheControl)
+    return
+  }
+  res.writeHead(200, {
+    'content-type': type,
+    'cache-control': cacheControl,
+    etag,
+    'last-modified': metadata.mtime.toUTCString(),
+  })
+  res.end(options.head === true ? undefined : body)
 }
 
 /**
@@ -135,6 +215,10 @@ export function apply(ctx: Context, config: Config): void {
       distIndex,
       () => ctx.connection.authorizeIndex(req, res),
       renderIndex,
+      {
+        ifNoneMatch: req.headers['if-none-match'],
+        head: req.method === 'HEAD',
+      },
     )
   }), 'frontend-static: fallback seat')
 }

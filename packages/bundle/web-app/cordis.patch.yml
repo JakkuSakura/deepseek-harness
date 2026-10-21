@@ -240,6 +240,23 @@
         # The listener's bind IP is accepted separately from this list.
         trustedHosts: !!js ctx.webStartup.trustedHosts
 
+    # Optional OpenID Connect gate. The invocation enables it by naming an
+    # issuer, client id, and at least one whitelist entry; an invocation without
+    # --oauth-issuer mounts an inert row so launch-token behavior is unchanged.
+    # The row cannot use a disabled expression: that expression would evaluate
+    # before webStartup exists and permanently skip the row.
+    - id: host-oauth
+      name: '@deepseek-ai/dsh-host-oauth'
+      inject: [webStartup]
+      config:
+        issuer: !!js ctx.webStartup.oauth?.issuer
+        clientId: !!js ctx.webStartup.oauth?.clientId
+        clientSecretRef: !!js ctx.webStartup.oauth?.clientSecretRef
+        allowedEmails: !!js ctx.webStartup.oauth?.allowedEmails
+        allowedDomains: !!js ctx.webStartup.oauth?.allowedDomains
+        allowedSubjects: !!js ctx.webStartup.oauth?.allowedSubjects
+        publicUrl: !!js ctx.webStartup.publicUrl
+
     # Raw Blob and ReadableStream uploads run independently of Connection's
     # RPC and generation service.
     - id: file-upload

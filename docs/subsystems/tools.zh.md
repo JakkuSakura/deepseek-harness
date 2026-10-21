@@ -181,6 +181,8 @@ interface ToolRestriction {
 
 `ctx.tools.execute()` 接受由调用方拥有且包含必需 readonly `signal` 的 `ToolExecutionInput`，将其解析后的 JSON 参数一次性物化为流水线拥有的 `ToolExecution`，然后让调用依次经过 `tools/pre-execute`（可重排的 allow/deny/ask waterfall）→ 已注册的单调 guard → `tools/execute`（环绕分派包装层）→ `projectContent` → `tools/post-execute`（检查/替换结果）→ 可选且由定义拥有的 `finalizeContent` → `tools/result`（不可变的权威结果）。只有 `tools/execute` 视图可以替换必需的 signal。最终产出为 `ToolExecutionResult`。
 
+`tools/execute` 包装层通常等待链的其余部分。把调用交给其他所有者接管的包装层改为返回 `detached` 成功结果：流水线提交该包装层的通知、冻结执行对象，并停止观察该调用。被分离的调用体继续在派发时使用的 signal 上运行，因此它最终的结果属于接管方，永远不进入 `tools/post-execute`、`finalizeContent` 或会话日志。嵌套的 `run_code` 子派发不能被分离，因为等待中的程序拥有它们的值。
+
 ```ts type-equiv
 /** Opaque call identity that permits correlation without exposing mutable execution state. */
 type ToolExecutionToken = symbol & { readonly [toolExecutionTokenBrand]: true }
@@ -358,6 +360,15 @@ interface ToolExecutionSuccess {
   readonly additionalContexts?: UserMessage[]
   /** The agent loop stops after committing this successful result batch. */
   readonly concludesTurn?: true
+  /**
+   * An around-dispatch wrapper moved this call out of the foreground (a
+   * background job, a hand-over) instead of awaiting it. `content` is then that
+   * wrapper's notice, not this tool's output: it is not validated against the
+   * tool's output declaration, and `value` is always `null` because no
+   * canonical value exists yet. Never persisted; a replay sees the notice as an
+   * ordinary successful result.
+   */
+  readonly detached?: true
 }
 ```
 

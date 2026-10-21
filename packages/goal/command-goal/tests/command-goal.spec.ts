@@ -120,7 +120,7 @@ describe('/goal human command', () => {
     expect(domainEvents(test.session)).toEqual([])
   })
 
-  it('creates a trimmed objective and refuses silent replacement of unfinished work', async () => {
+  it('creates a trimmed objective, and a further objective replaces it', async () => {
     const test = await harness()
     const created = await run(test, '\n  finish the release  ')
     expect(created.kind).toBe('success')
@@ -132,11 +132,16 @@ describe('/goal human command', () => {
     expect(domainEvents(test.session).map(event => event.type)).toEqual(['goal/change'])
 
     const count = domainEvents(test.session).length
-    await expect(run(test, ' replacement')).resolves.toEqual({
-      kind: 'error',
-      text: 'A goal is already active. Use /goal edit <objective> to change it or /goal clear before replacing it.',
-    })
-    expect(domainEvents(test.session)).toHaveLength(count)
+    const replaced = await run(test, ' replacement')
+    expect(replaced.kind).toBe('success')
+    expect(replaced.text).toContain('Goal replaced')
+    expect(replaced.text).toContain('Objective: replacement')
+    // A fresh goal, not an edit of the old one: cleared and created, so it arrives armed
+    // with a full budget rather than inheriting a spent one.
+    expect(replaced.text).toContain('Status: active')
+    expect(replaced.text).toContain('Rounds: 0/256')
+    expect(test.ctx.goals.get(test.agent)?.objective).toBe('replacement')
+    expect(domainEvents(test.session).length).toBeGreaterThan(count)
   })
 
   it('treats only exact control words as controls', async () => {
@@ -145,27 +150,30 @@ describe('/goal human command', () => {
     expect(test.ctx.goals.get(test.agent)?.objective).toBe('pause everything only after verification')
   })
 
-  it('edits inline, requires an objective, and starts a new goal when the old one is complete', async () => {
+  it('edits inline, refuses a bare edit, and replaces a complete goal with a new one', async () => {
     const empty = await harness()
-    const invalidEdit = await run(empty, ' edit')
-    expect(invalidEdit.kind).toBe('error')
-    expect(invalidEdit.text).toContain('requires a replacement objective')
-    const missingEdit = await run(empty, ' edit replacement')
-    expect(missingEdit.kind).toBe('error')
-    expect(missingEdit.text).toContain('/goal edit requires one')
+    // A bare verb asks for an objective to replace with; the argument form edits in place.
+    const bare = await run(empty, ' edit')
+    expect(bare.kind).toBe('error')
+    expect(bare.text).toContain('requires a replacement objective')
+    const withoutGoal = await run(empty, ' edit replacement')
+    expect(withoutGoal.kind).toBe('error')
+    expect(empty.ctx.goals.get(empty.agent)).toBeUndefined()
 
     const test = await harness()
     await run(test, ' first')
     const first = test.ctx.goals.get(test.agent)!
-    const updated = await run(test, ' EDIT\n  second  ')
-    expect(updated.kind).toBe('success')
-    expect(updated.text).toContain('Goal updated')
+    const edited = await run(test, ' EDIT\n  second  ')
+    expect(edited.kind).toBe('success')
+    expect(edited.text).toContain('Goal updated')
     expect(test.ctx.goals.get(test.agent)).toMatchObject({ id: first.id, objective: 'second', revision: 2 })
 
     const current = test.ctx.goals.get(test.agent)!
     test.ctx.goals.complete(test.agent, ref(current))
-    const replacement = await run(test, ' edit third')
+    const replacement = await run(test, ' third')
     expect(replacement.kind).toBe('success')
+    // A complete goal needs no clearing — there is nothing live to replace — so this is a
+    // plain creation, and only a goal that is still there is cleared first.
     expect(replacement.text).toContain('Goal created')
     expect(test.ctx.goals.get(test.agent)).toMatchObject({ objective: 'third', revision: 1 })
     expect(test.ctx.goals.get(test.agent)?.id).not.toBe(first.id)
@@ -305,13 +313,13 @@ describe('/goal attachments', () => {
     expect((message.content[1] as { attachment: { name: string } }).attachment.name).toBe('notes.txt')
   })
 
-  it('accompanies an edit and a post-complete recreate the same way', async () => {
+  it('accompanies a replacement objective the same way', async () => {
     const test = await harness()
     provideStore(test)
     const followup = vi.fn()
     ;(test.agent as unknown as { followup: typeof followup }).followup = followup
     test.ctx.goals.create(test.agent, { objective: 'initial objective' })
-    const result = await runWithAttachments(test, ' edit refined objective')
+    const result = await runWithAttachments(test, ' refined objective')
     expect(result.kind).toBe('success')
     expect(followup).toHaveBeenCalledTimes(1)
   })
@@ -333,13 +341,13 @@ describe('/goal attachments', () => {
     expect(test.ctx.goals.get(test.agent)?.phase).toBe('active')
   })
 
-  it('does not submit attachments when goal creation is refused', async () => {
+  it('does not submit attachments when the command is refused', async () => {
     const test = await harness()
     provideStore(test)
     const followup = vi.fn()
     ;(test.agent as unknown as { followup: typeof followup }).followup = followup
     test.ctx.goals.create(test.agent, { objective: 'existing objective' })
-    const result = await runWithAttachments(test, ' replacement objective')
+    const result = await runWithAttachments(test, ' edit')
     expect(result.kind).toBe('error')
     expect(followup).not.toHaveBeenCalled()
   })

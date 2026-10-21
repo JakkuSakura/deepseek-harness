@@ -25,6 +25,9 @@ import {
 } from '@deepseek-ai/dsh-session'
 // Type-only: activates the `ctx.sessionProjections` Context declaration.
 import type {} from '@deepseek-ai/dsh-session-projection'
+// Type-only: activates the optional `ctx.systemPrompt` service and `AssembleContext.agent`.
+import type {} from '@deepseek-ai/dsh-system-prompt'
+import type {} from '@deepseek-ai/dsh-agent'
 import type {
   TokenMeasurement,
   TokenMeasurementBaseline,
@@ -36,6 +39,7 @@ import { estimateContent, estimateMessage, estimateToolsTokens, ROLE_OVERHEAD } 
 import { commitSurfaceTokens, planSurfaceTokens } from './surface-fold.ts'
 import type { MeterSurfaceNode } from './surface-fold.ts'
 import { priceSurface } from './route-pricing.ts'
+import { renderContextUsage } from './prompt-context.ts'
 
 export type * from './types.ts'
 // Module-edge re-export: forces the emitted index.d.ts to import the
@@ -114,6 +118,23 @@ export class TokenMeter extends Service {
     ctx.sessionProjections.register(tokenUsageProjectionDefinition)
     ctx.sessionProjections.register(contextPressureProjectionDefinition)
     ctx.sessionProjections.register(contextBreakdownProjectionDefinition)
+
+    // The model has no other observation of its context budget, so the
+    // occupancy projection is also rendered as runtime context. `systemPrompt`
+    // stays optional: measurement works without a prompt registry.
+    ctx.inject(['systemPrompt'], (scope: Context) => {
+      scope.systemPrompt.context({
+        name: 'token:usage',
+        order: scope.systemPrompt.getContextOrder('CONTEXT_USAGE'),
+        text: (context) => {
+          const session = context.agent?.session
+          if (session === undefined) return ''
+          const view = contextPressureProjectionDefinition.wire.view
+          const state = ctx.sessionProjections.stateOf(session, 'contextPressure')
+          return renderContextUsage(state === undefined ? undefined : view(state))
+        },
+      })
+    })
 
     // Readers catch up independently, while eager observation bounds ordinary
     // read latency without creating state for sessions no consumer has read.

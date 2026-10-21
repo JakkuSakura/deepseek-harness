@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-使用 `ctx.tokenMeter` 估算会话当前的请求与上下文压力，或为单条消息计价。测量会回放持久会话日志，结果确定且不进行模型调用，因此压缩、占用显示与遥测可以共享同一结果。会话投影可用时，消费方可以读取 `tokenUsage`、`contextPressure` 与 `contextBreakdown`；文本和没有图片定价的路由采用近似的固定启发式规则，存在声明时应用视觉 token 定价，文件则按模型可见的句柄文本计价。只有请求 envelope 完全相同时才复用提供方报告的用量；本包不添加模型可见内容，也不在 loop 中做决策。
+使用 `ctx.tokenMeter` 估算会话的请求与上下文压力，或为单条消息计价。测量会回放持久会话日志，结果确定且不进行模型调用，因此压缩、占用显示与遥测共享同一结果。会话投影提供 `tokenUsage`、`contextPressure` 与 `contextBreakdown`；文本和没有图片定价的路由采用固定启发式规则，存在声明时应用视觉 token 定价，文件则按模型可见的句柄文本计价。只有请求 envelope 完全相同时才复用提供方报告的用量；本包不在 loop 中做决策，并在挂载提示词注册表时把当前占用作为运行时上下文渲染给模型。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-当消费方需要为压缩决策、占用显示或遥测获取 token 或上下文压力时挂载本插件。估算器没有任何配置，也不添加模型可见表面；模型容量属于拥有精确提供方／模型路由的适配器，可通过 `ctx.llm.resolveModelInfo().context` 获取。
+当消费方需要为压缩决策、占用显示或遥测获取 token 或上下文压力时挂载本插件。估算器没有任何配置；模型容量属于拥有精确提供方／模型路由的适配器，可通过 `ctx.llm.resolveModelInfo().context` 获取。同时挂载提示词注册表时，插件会把当前占用作为运行时上下文渲染给模型（见[面向模型的上下文用量](#model-facing-context-usage)）。
 
 ### 何时选择
 
@@ -54,6 +54,13 @@ const price = ctx.tokenMeter.estimateMessage(message)
 
 `deriveTurnTokenUsage(events)` 为浏览器消费方把一个完整轮次折叠为精确的逐次尝试与整轮用量。生命周期证据缺失、计数不安全或精确总量矛盾时不返回结果；只有每次参与的尝试都报告可选缓存、推理或路由值时，相应汇总才会出现。
 
+<a id="model-facing-context-usage"></a>
+### 面向模型的上下文用量
+
+挂载 `ctx.systemPrompt` 时，meter 贡献一个运行时上下文小节 `token:usage`，排在 sandbox 与审批策略之前。它渲染这样的句子：`Context usage: about 250,000 of the 1,000,000-token context window is in use (25%, about 750,000 tokens free).` 分子是 `contextPressure` 投影的 `projectedTokens`（缺失时回退到 `pressureTokens`），因此模型与会话状态显示读取同一个数字；分母是该投影的 `contextWindow`。两者都具备之前，该小节不渲染任何内容；无 agent 的装配也不贡献任何内容。
+
+上报值按窗口的 5% 取整，任何非零用量至少上报一档，因此会话只在占用跨档时追加新的运行时上下文快照。
+
 ### 组合
 
 ```yaml
@@ -65,7 +72,7 @@ const price = ctx.tokenMeter.estimateMessage(message)
 
 ### 解读数字
 
-占用是参考数字，不是计费记录：harness 中没有任何机制依据它做决定，压缩读取的是 `measure()`。UI 用测量压力除以所选模型独立解析的容量来计算占用。`contextBreakdown` 数字是估算值，其总和不会等于 `projectedTokens`；后者的提供方锚点恰好携带启发式误差——CJK 文本与 JSON schema 在每 token 四字符下严重低估。
+占用是参考数字，不是计费记录：压缩读取 `measure()`，而面向模型的句子报告的是 `contextPressure` 投影。UI 用测量压力除以所选模型独立解析的容量来计算占用。`contextBreakdown` 数字是估算值，其总和不会等于 `projectedTokens`；后者的提供方锚点恰好携带启发式误差——CJK 文本与 JSON schema 在每 token 四字符下严重低估。
 
 -----
 
@@ -90,6 +97,7 @@ const price = ctx.tokenMeter.estimateMessage(message)
 | [`src/surface-fold.ts`](src/surface-fold.ts) | 与 `measure()` 共享的位置表面 fold |
 | [`src/surface-projection.ts`](src/surface-projection.ts) | O(1) 投影单元的影价协议 |
 | [`src/usage-projection.ts`](src/usage-projection.ts) | `tokenUsage` 与 `contextPressure` 投影定义 |
+| [`src/prompt-context.ts`](src/prompt-context.ts) | 面向模型的占用句子及其上报档位 |
 | [`src/breakdown-projection.ts`](src/breakdown-projection.ts) | `contextBreakdown` 投影定义 |
 | [`src/client.ts`](src/client.ts) | 面向投影消费方、可安全用于浏览器的客户端接口 |
 | [`src/turn-usage.ts`](src/turn-usage.ts) | 精确逐次尝试与逐 Turn 用量的纯 fold |
@@ -124,11 +132,19 @@ const price = ctx.tokenMeter.estimateMessage(message)
 <a id="model-experience"></a>
 ## 模型体验
 
-间接地，通过 `dsh-compaction-basic` 等消费方；服务本身不添加任何提示词、消息、schema、工具或模型调用。
+### 运行时上下文占用
+
+#### 模型看到的内容
+
+挂载 `ctx.systemPrompt` 时，插件贡献一个运行时上下文小节 `token:usage`，排在 sandbox 与审批策略之前。循环只在该快照文本变化时才把当前运行时上下文快照落成持久 user 消息，因此模型看到最新的占用句子，此前的快照被取代。该句子报告 `contextPressure` 投影的预计提示词规模对比最新声明的窗口，并按窗口的 5% 分档取整。meter 不发起模型调用，也不添加工具或 schema。
+
+#### Token 影响
+
+每次变更的快照是一条运行时上下文 user 消息：占用句子加上其他生效的运行时上下文小节，通常不超过 120 tokens。5% 上报档位决定一个窗口最多产生 20 次快照，而压缩通常会在窗口填满前降低占用。
 
 #### KV Cache 影响
 
-不直接失效；任何请求前缀变更都由点名的消费方负责。
+快照仅追加：每次变更的快照在保留历史之后追加一条 user 消息，因此其之前的前缀仍可复用；未变更的快照不追加任何内容。
 
 ## 已知限制与延期工作
 
@@ -142,6 +158,7 @@ const price = ctx.tokenMeter.estimateMessage(message)
 - **提供方用量只在规范 envelope 完全相同时可复用**——工具、提供方、模型或调用配置变化会刻意回退到完整启发式估算；系统提示词变更在下一次成功调用之前按带符号的表面增量计量。
 - **系统提示词改写不带影子价**——循环替换 system 节点时没有紧邻的计量事件，因此 `contextPressure.projectedTokens` 以零增量折叠该替换，直到下一个用量样本；`contextBreakdown.systemTokens` 与 `measure()` 会立即按新提示词重新计价。
 - **构成检查点保留当前 surface**——精确的 system/message 分类需要位置条目；检查点大小和 surface 事件折叠成本为 O(当前保留 surface)。
+- **面向模型的句子是粗粒度参考值**——按 5% 分档取整，切换模型后会滞后一次请求，也不决定压缩何时运行（压缩读取 `measure()`）。它报告的是窗口占用，不是任务预算。
 
 <a id="dev-note"></a>
 ### 开发备注

@@ -141,6 +141,30 @@ describe('real Loader composition', () => {
     await writeFile(join(root!, 'dist', 'app.js'), 'export const rebuilt = true')
     expect(await request(port, '/app.js')).toMatchObject({ status: 200, body: 'export const rebuilt = true' })
 
+    // Repeat visits revalidate instead of redownloading: every asset carries an
+    // ETag, unhashed names stay revalidating, and a matching If-None-Match gets
+    // an empty 304. Vite content-hashed names may be cached immutably.
+    const asset = await fetch(`http://127.0.0.1:${String(port)}/app.js`)
+    const assetTag = asset.headers.get('etag')
+    expect(assetTag).not.toBeNull()
+    expect(asset.headers.get('cache-control')).toBe('no-cache')
+    expect(asset.headers.get('last-modified')).not.toBeNull()
+    const revalidated = await fetch(`http://127.0.0.1:${String(port)}/app.js`, {
+      headers: { 'if-none-match': assetTag as string },
+    })
+    expect(revalidated.status).toBe(304)
+    expect(await revalidated.text()).toBe('')
+
+    await mkdir(join(root!, 'dist', 'assets'), { recursive: true })
+    await writeFile(join(root!, 'dist', 'assets', 'index-abcdefgh.js'), 'export const hashed = true')
+    const hashed = await fetch(`http://127.0.0.1:${String(port)}/assets/index-abcdefgh.js`)
+    expect(hashed.headers.get('cache-control')).toBe('public, max-age=31536000, immutable')
+    const hashedTag = hashed.headers.get('etag') as string
+    const hashedRevalidated = await fetch(`http://127.0.0.1:${String(port)}/assets/index-abcdefgh.js`, {
+      headers: { 'if-none-match': `W/${hashedTag}` },
+    })
+    expect(hashedRevalidated.status).toBe(304)
+
     // Unknown extension ships as octet-stream.
     expect(await request(port, '/blob.bin')).toMatchObject({ status: 200, type: 'application/octet-stream', body: 'BLOB' })
 
@@ -166,6 +190,18 @@ describe('real Loader composition', () => {
       expect(base).toBeLessThan(got.body.indexOf('<script>window.__T__=1</script>'))
     }
     offRows()
+
+    // The rendered index revalidates too: its ETag covers the injected rows.
+    const indexPage = await fetch(`http://127.0.0.1:${String(port)}/`, authenticated())
+    const indexTag = indexPage.headers.get('etag') as string
+    expect(indexPage.headers.get('cache-control')).toBe('no-cache')
+    expect(indexTag).not.toBeNull()
+    const indexRevalidated = await fetch(`http://127.0.0.1:${String(port)}/`, authenticated({
+      headers: { 'if-none-match': indexTag },
+    }))
+    expect(indexRevalidated.status).toBe(304)
+    expect(await indexRevalidated.text()).toBe('')
+
     expect(await request(port, '/', authenticated({ method: 'HEAD' }))).toEqual({
       status: 200,
       type: 'text/html; charset=utf-8',
@@ -220,5 +256,20 @@ describe('real Loader composition', () => {
     await frontendEntry!.fiber?.dispose()
     expect((await request(port, '/no/such/route')).status).toBe(404)
     expect(() => server.registerFallback(() => {})).not.toThrow()
+  })
+})
+
+describe('serveStatic failure paths', () => {
+  it('rethrows an index render failure that is not a filesystem miss', async () => {
+    const { IncomingMessage, ServerResponse } = await import('node:http')
+    const { Socket } = await import('node:net')
+    const { serveStatic } = await import('../src/index.ts')
+    const request = new IncomingMessage(new Socket())
+    const response = new ServerResponse(request)
+    await expect(serveStatic(
+      '/', response, '/tmp/dsh-static-root', '/tmp/dsh-static-root/index.html',
+      () => true,
+      () => Promise.reject(new Error('synthetic render failure')),
+    )).rejects.toThrow(/synthetic render failure/u)
   })
 })

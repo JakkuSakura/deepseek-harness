@@ -26,9 +26,21 @@ The fence accepts loopback, the listener's own bind address, and every authority
 
 Neither the advertised URL nor the fence protects the listening port itself, so restrict the port to the trusted proxy or network.
 
+## Require single sign-on
+
+The launch token authenticates one browser, not a person, so a deployment shared by several people should put the [OpenID Connect gate](../../../packages/host/oauth/README.md) in front of it instead:
+
+```sh
+dsh --profile web --public-url https://app.example/ui/ --trusted-host app.example \
+  --oauth-issuer https://kc.example/realms/main --oauth-client-id dsh \
+  --oauth-client-secret-ref DSH_OAUTH_CLIENT_SECRET --oauth-allow-domain example.com
+```
+
+The gate redirects an unauthenticated browser to the provider, admits only whitelisted identities, and issues its own authority-bound cookie, which the index, `/api`, and the WebSocket upgrade accept. Enabling the gate retires the launch token: the printed URL carries no token and a stale tokenized URL is redirected to sign-in, so the provider is the only way in. Register `https://app.example/ui/auth/callback` as the client's redirect URI, and make sure the proxy forwards `X-Forwarded-Proto: https` so the callback URL and the cookie's `Secure` flag match the browser-facing origin. The mount prefix is stripped like every other route: `/ui/auth/*` reaches the listener as `/auth/*`.
+
 ## Secure the external leg
 
-Terminate TLS at the proxy, on the listener itself, or on both; `--public-url` remains an advertisement. An `http://` browser-facing root exposes the launch token in plaintext. An `https://` proxy root protects the browser-to-proxy leg; encryption between proxy and listener depends on the listener's TLS configuration.
+Terminate TLS at the proxy, on the listener itself, or on both; `--public-url` remains an advertisement. An `http://` browser-facing root exposes the launch token in plaintext. An `https://` proxy root protects the browser-to-proxy leg; encryption between proxy and listener depends on the listener's TLS configuration. Without a login gate the printed URL carries a process credential; `--oauth-issuer` retires that token.
 
 To terminate on the listener, pass `--tls-cert` and `--tls-key`, each a path resolved against the process working directory: the certificate file holds the full chain and the key file an unencrypted PEM private key. DSH never obtains, renews, or watches certificates, and the carrier reads the files once, so replace them and reload the listener or restart the process to change them; startup fails on a missing or invalid pair and never falls back to HTTP. The browser applies its own trust store and name checks, so the certificate must cover the hostname or IP you open. The default port stays 3080. Native TLS needs no proxy, but proxy deployments and `--public-url` remain supported independently. A TLS listener marks session cookies `Secure`; keep the public browser-facing leg HTTPS so browsers can return those cookies.
 

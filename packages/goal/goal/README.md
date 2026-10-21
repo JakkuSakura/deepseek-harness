@@ -99,6 +99,7 @@ This section explains how the service realizes the behavior above; the observabl
 - **Activation is process-local.** `armed` and `disarmed` live in a per-session cache and are never persisted. A fresh cache and every `agent/created` edge disarm continuation even when replay finds an active durable phase; `disarm()` removes authority without writing a revision or emitting a mutation.
 - **Strict replay.** The fold derives lifecycle mutations only from `goal/change` and rejects malformed shapes, discontinuous revisions, illegal phase transitions, non-monotonic per-goal timestamps, and non-sequential admitted rounds. Positive rounds advance only on admitted goal-sourced `user/message` events, and mutation timestamps clamp against the preceding update when wall time moves backward.
 - **Projection unit.** The package requires the projection registry and registers a strict `goal` unit. Its host state retains replay validation data and the first failure, while its client view exposes the latest valid whole goal or `null`; `GoalService` rejects access after a retained replay failure.
+- **Completion certification is an extension point.** The domain declares `GoalVerifierService` on `ctx.goalVerifier` for consumers that must certify an autonomous completion claim. The domain never evaluates an objective, and its own `complete()` remains caller-authoritative; [`dsh-goal-verifier-llm`](../goal-verifier-llm/README.md) implements the provider.
 
 ### Source map
 
@@ -156,7 +157,7 @@ These limits define when the goal service is a poor fit or needs special care. T
 
 - **State, not scheduling** — this package does not decide when an armed goal continues, retry abnormal failures, or cancel an active turn; those policies belong to consumer packages such as `dsh-goal-round-driver`.
 - **Round-count budget only** — `maxGoalRounds` does not meter tokens, currency, wall time, or provider quotas.
-- **No independent evaluator** — the caller that records completion or blocking is authoritative; evaluator-backed certification is deferred to a separate policy layer.
+- **No independent evaluator in the domain** — `complete()` records the caller's decision; a mounted `ctx.goalVerifier` provider can certify model-originated claims, and unlocking evaluator-backed blocking remains deferred.
 - **One current goal** — parallel objectives and a separate goal database are intentionally absent; history remains available in the session log after replacement or clear.
 - **Trusted in-process producers** — a plugin with direct `Session` access can append counterfeit `goal/change` data. Strict replay detects malformed or inconsistent records and leaves goal access failed at that record until the log is repaired; this is integrity detection, not plugin isolation.
 

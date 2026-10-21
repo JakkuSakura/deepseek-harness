@@ -168,7 +168,7 @@ After a successful step crosses the threshold, oversized tool results are first 
 ##### Conversation checkpoint preamble
 
 ```markdown
-This is an automatically generated checkpoint condensing an earlier span of the conversation to free up context. Treat the captured context as established background and build on it without restating it. Continue the task directly from the messages that follow, without acknowledging this checkpoint.
+This checkpoint replaces an earlier span of the conversation that was condensed. Treat the captured context as established background and build on it without restating it. Compaction keeps this session inside its context window: continue the task directly from the messages that follow, do not narrow, stop, or block work for context reasons, and do not acknowledge this checkpoint.
 ```
 
 #### Token effect

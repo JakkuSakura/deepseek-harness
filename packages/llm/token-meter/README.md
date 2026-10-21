@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use `ctx.tokenMeter` to estimate a session's current request and context pressure or price one message. Measurements replay the durable session log, remain deterministic, and make no model calls, so compaction, occupancy displays, and telemetry can share one result. When session projections are available, consumers can read `tokenUsage`, `contextPressure`, and `contextBreakdown`; text and routes without image pricing use an approximate fixed heuristic, declared visual-token pricing applies when available, and files are priced as model-visible handle text. Provider-reported usage is reused only for an identical request envelope; the package adds no model-visible content and makes no loop decisions.
+Use `ctx.tokenMeter` to estimate a session's request and context pressure or price one message. Measurements replay the durable session log, stay deterministic, and make no model calls, so compaction, occupancy displays, and telemetry share one result. Session projections expose `tokenUsage`, `contextPressure`, and `contextBreakdown`; text and routes without image pricing use a fixed heuristic, declared visual-token pricing applies when available, and files are priced as model-visible handle text. Provider-reported usage is reused only for an identical request envelope; the package makes no loop decisions, and with a prompt registry it renders current occupancy to the model as runtime context.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ Use `ctx.tokenMeter` to estimate a session's current request and context pressur
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this plugin when a consumer needs token or context pressure for compaction decisions, occupancy displays, or telemetry. The estimator has no settings and adds no model-visible surface; model capacity belongs to the adapter that owns the exact provider/model route and is available through `ctx.llm.resolveModelInfo().context`.
+Mount this plugin when a consumer needs token or context pressure for compaction decisions, occupancy displays, or telemetry. The estimator has no settings; model capacity belongs to the adapter that owns the exact provider/model route and is available through `ctx.llm.resolveModelInfo().context`. When a prompt registry is also mounted, the plugin renders current occupancy as runtime context (see [Model-facing context usage](#model-facing-context-usage)).
 
 ### When to choose it
 
@@ -54,6 +54,12 @@ Image offload reprices existing node identities while preserving prior usage anc
 
 `deriveTurnTokenUsage(events)` folds one complete turn into exact per-attempt and whole-turn usage for browser consumers. It returns no result when lifecycle evidence is missing, counts are unsafe, or exact totals conflict; each corresponding aggregate appears only when every participating attempt reports its optional cache, reasoning, or route value.
 
+### Model-facing context usage
+
+With `ctx.systemPrompt` mounted, the meter contributes one runtime-context section, `token:usage`, ordered before the sandbox and approval policies. It renders a sentence such as `Context usage: about 250,000 of the 1,000,000-token context window is in use (25%, about 750,000 tokens free).` The numerator is the `contextPressure` projection's `projectedTokens` (falling back to `pressureTokens`), so the model and the conversation status display read the same figure; the denominator is that projection's `contextWindow`. The section renders nothing until both a provider sample and an advertised window exist, and it contributes nothing to an agentless assembly.
+
+Reported values round to the nearest 5% of the window, and any nonzero use reports at least one step, so a session appends a new runtime-context snapshot only when occupancy crosses a step.
+
 ### Composition
 
 ```yaml
@@ -65,7 +71,7 @@ Both plugins have usable defaults. The meter consumes only the optional `llm` se
 
 ### Reading the numbers
 
-Occupancy is a reference figure, not a billing record: nothing in the harness makes decisions from it, and compaction reads `measure()` instead. A UI computes occupancy by dividing measured pressure by the separately resolved capacity for the selected model. The `contextBreakdown` figures are estimates that will not sum to `projectedTokens`, whose provider anchor carries exactly the heuristic error — CJK text and JSON schemas underprice badly at four characters per token.
+Occupancy is a reference figure, not a billing record: compaction reads `measure()`, while the model-facing sentence reports the `contextPressure` projection. A UI computes occupancy by dividing measured pressure by the separately resolved capacity for the selected model. The `contextBreakdown` figures are estimates that will not sum to `projectedTokens`, whose provider anchor carries exactly the heuristic error — CJK text and JSON schemas underprice badly at four characters per token.
 
 -----
 
@@ -90,6 +96,7 @@ The service is built on one fold and one anchor. Each session gets an isolated r
 | [`src/surface-fold.ts`](src/surface-fold.ts) | The positional surface fold shared with `measure()` |
 | [`src/surface-projection.ts`](src/surface-projection.ts) | Shadow-price protocol for the O(1) projection units |
 | [`src/usage-projection.ts`](src/usage-projection.ts) | `tokenUsage` and `contextPressure` projection definitions |
+| [`src/prompt-context.ts`](src/prompt-context.ts) | The model-facing occupancy sentence and its reporting step |
 | [`src/breakdown-projection.ts`](src/breakdown-projection.ts) | `contextBreakdown` projection definition |
 | [`src/client.ts`](src/client.ts) | Browser-safe client surface for projection consumers |
 | [`src/turn-usage.ts`](src/turn-usage.ts) | Pure fold for exact per-attempt and per-Turn usage |
@@ -124,11 +131,19 @@ Read these pages when the package-level contract is not enough. They move from t
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through consumers such as `dsh-compaction-basic`; the service itself adds no prompt, message, schema, tool, or model call.
+### Runtime-context occupancy
+
+#### What the model sees
+
+With `ctx.systemPrompt` mounted, the plugin contributes one runtime-context section, `token:usage`, ordered before the sandbox and approval policies. The loop materializes the current runtime-context snapshot as a durable user message only when its text changes, so the model sees the newest occupancy sentence and earlier snapshots are superseded. That sentence reports the `contextPressure` projection's projected prompt size against the newest advertised window, rounded to 5% of the window. The meter makes no model call and adds no tool or schema.
+
+#### Token effect
+
+Each changed snapshot is one runtime-context user message: the occupancy sentence plus the other active runtime-context sections, typically under 120 tokens. The 5% reporting step bounds how many snapshots a window can produce — at most 20 — and compaction usually reduces occupancy before the window fills.
 
 #### KV Cache effect
 
-No direct invalidation; the named consumer owns any request-prefix changes.
+The snapshot is append-only: each changed snapshot appends a user message after retained history, so the prefix before it stays reusable, and an unchanged snapshot appends nothing.
 
 ## Known Limitations and Deferred Work
 
@@ -142,6 +157,7 @@ These limits define where the measurement stops and future work begins. They are
 - **Provider usage is only reusable for an identical canonical envelope** — tools, provider, model, or call-config changes deliberately fall back to full heuristic estimation; system-prompt changes are signed surface deltas until the next successful call.
 - **A system-prompt rewrite carries no shadow price** — the loop replaces a system node without an adjacent metering event, so `contextPressure.projectedTokens` folds that replacement at zero delta until the next usage sample; `contextBreakdown.systemTokens` and `measure()` reprice the new prompt immediately.
 - **Composition checkpoints retain the current surface** — exact system/message classification needs positional entries; checkpoint size and surface-event folding are O(current retained surface).
+- **The model-facing line is a coarse reference** — it rounds to 5% steps, lags one request after a model switch, and does not decide when compaction runs (compaction reads `measure()`). It reports window occupancy, not a task budget.
 
 <a id="dev-note"></a>
 ### Dev Note

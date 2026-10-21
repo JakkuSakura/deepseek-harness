@@ -601,6 +601,27 @@ describe('ToolRuntime', () => {
     })
   })
 
+  it('passes a detached wrapper result through without validating the tool output', async () => {
+    const ctx = await setup()
+    ctx.tools.register(echoTool)
+    ctx.on('tools/execute', async () => ({
+      isError: false,
+      detached: true,
+      value: null,
+      content: [{ type: 'text', text: 'moved to background job bg-1' }],
+    }))
+
+    // `echo` declares a string output, so `value: null` can only survive
+    // because a detached result is never validated against that declaration.
+    const result = await ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('wrapper-detached'), name: 'echo', arguments: {} })
+    expect(result).toEqual({
+      isError: false,
+      detached: true,
+      value: null,
+      content: [{ type: 'text', text: 'moved to background job bg-1' }],
+    })
+  })
+
   it('fails wrapper-authored success normalization when the owning tool disappears', async () => {
     const ctx = await setup()
     const dispose = ctx.tools.register(echoTool)

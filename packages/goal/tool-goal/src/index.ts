@@ -252,7 +252,7 @@ export function apply(ctx: Context, config: Config): void {
       },
     },
     output: GOAL_OUTPUT,
-    execute(args, exec) {
+    async execute(args, exec) {
       const execution = goalToolExecution(ctx, exec)
       const ref = goalRef(args.goal_id, args.revision)
       const replacements = {
@@ -309,6 +309,26 @@ export function apply(ctx: Context, config: Config): void {
           + `current round is ${authority.goal.roundsStarted}`,
           'GOAL_TOOL_BLOCK_THRESHOLD',
         )
+      }
+      if (args.action === 'complete' && authority.kind === 'goal-round') {
+        const verifier = ref.id === authority.goal.id && ref.revision === authority.goal.revision
+          ? ctx.get('goalVerifier')
+          : undefined
+        if (verifier !== undefined) {
+          const verdict = await verifier.verify({
+            agent: execution.agent,
+            goal: authority.goal,
+            ref,
+            events: execution.events,
+            signal: exec.signal,
+          })
+          if (!verdict.certified) {
+            throw new HarnessError(
+              `Goal completion was not certified: ${verdict.reason}`,
+              'GOAL_VERIFICATION_REJECTED',
+            )
+          }
+        }
       }
       const goal = args.action === 'complete'
         ? ctx.goals.complete(execution.agent, ref)

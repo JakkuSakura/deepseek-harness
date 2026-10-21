@@ -1,0 +1,46 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/host/oauth/README.md
+/:
+  en: d090042a7fd9723b
+  zh: 755c5ef7f671d2a9
+/deepseek-ai-dsh-host-oauth:
+  en: 63ba2cf2baa62d9f
+  zh: a233d3df757bc1dd
+/deepseek-ai-dsh-host-oauth/summary:
+  en: cfe30bc6874905ab
+  zh: 0b377e9a6aa5cee4
+/deepseek-ai-dsh-host-oauth/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 996b9d8f46848ed9
+/deepseek-ai-dsh-host-oauth/use-this-package:
+  en: 54ef4a607543a6c0
+  zh: ed8f15f7dad3d00b
+/deepseek-ai-dsh-host-oauth/use-this-package/configuration:
+  en: 9be207088a22e850
+  zh: 864ac13d4f0e4150
+/deepseek-ai-dsh-host-oauth/use-this-package/what-the-gate-enforces:
+  en: 764f99f197f727d9
+  zh: 19082ccf6bf845e0
+/deepseek-ai-dsh-host-oauth/understand-the-implementation:
+  en: 9ab85299cfcba354
+  zh: e770d870aeb75463
+/deepseek-ai-dsh-host-oauth/understand-the-implementation/source-map:
+  en: 1243f7ace2eefc64
+  zh: 4f48426b4e1b3c7b
+/deepseek-ai-dsh-host-oauth/further-exploration:
+  en: c251ce71e698849d
+  zh: e43d723e2bae1994
+/deepseek-ai-dsh-host-oauth/model-experience:
+  en: c771a6d0d941dab0
+  zh: c771a6d0d941dab0
+/deepseek-ai-dsh-host-oauth/model-experience/kv-cache-effect:
+  en: ca75c51c89c2c9b0
+  zh: ca75c51c89c2c9b0
+/deepseek-ai-dsh-host-oauth/known-limitations-and-deferred-work:
+  en: 31bacd856949913f
+  zh: 496aaeb6a406e0cf
+/deepseek-ai-dsh-host-oauth/known-limitations-and-deferred-work/dev-note:
+  en: 2da982c4829557e9
+  zh: 6a7f70bce11fd06d

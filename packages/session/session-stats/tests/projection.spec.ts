@@ -197,6 +197,23 @@ describe('sessionStats wall-time fold (controlled timestamps)', () => {
     })
   }
 
+  it('drops decode figures once they age out, rather than averaging a whole Session', () => {
+    // Two steps 40 seconds apart, each with its own first token. At the second message only
+    // the recent step is inside the window, so the figure is that step's tokens alone —
+    // where the whole-log sum would have read 67.
+    const value = fold([
+      at(10_000, 'step/start', { turn: 1, step: 1 }),
+      messageAt(12_000, [{ time: 11_980, chunk: { type: 'text-delta', index: 0, text: 'a' } }], {
+        inputTokens: 1, outputTokens: 60,
+      }),
+      at(50_000, 'step/start', { turn: 1, step: 1 }),
+      messageAt(52_000, [{ time: 51_980, chunk: { type: 'text-delta', index: 0, text: 'a' } }], {
+        inputTokens: 1, outputTokens: 7,
+      }),
+    ])
+    expect(value.decodeTokens).toBe(7)
+  })
+
   it('accrues model, first-token, and decode time from one fully recorded step', () => {
     expect(fold([
       at(1_000, 'step/start', { turn: 1, step: 1 }),

@@ -115,7 +115,34 @@ export interface ConnectionIndexResponse {
   end(body?: string): unknown
 }
 
-/** Outcome of admitting one request: the Peer it speaks for, or the status refusing it. */
+/**
+ * External browser-session credential accepted alongside Connection's own
+ * signed cookie. A deployment-owned login gate, such as an OpenID Connect
+ * plugin, supplies one so a browser authenticated there needs no process
+ * launch token.
+ */
+export interface BrowserSessionAuthenticator {
+  /**
+   * Authenticate one Host request from this authenticator's own credential.
+   * @param request - request headers carrying this authenticator's cookie.
+   * @returns true when the request may act as the operator.
+   */
+  isAuthenticated(request: ConnectionTrustRequest): boolean
+
+  /**
+   * Take ownership of an unauthenticated index response, typically by
+   * redirecting to a login page.
+   * @param request - root or configured-index HTTP request.
+   * @param response - response owned when this method returns true.
+   * @returns true only when the response was written.
+   */
+  authorizeIndex?(
+    request: ConnectionIndexRequest,
+    response: ConnectionIndexResponse,
+  ): boolean
+}
+
+/** Outcome of admitting one request: the operator Peer it speaks for, or the status refusing it. */
 export type PeerAdmission =
   | { readonly peer: PeerScope }
   | { readonly rejection: 401 | 403 }
@@ -264,6 +291,22 @@ export interface HostConnectionHandle {
    * @returns true only when the frontend may serve index.html.
    */
   authorizeIndex(request: ConnectionIndexRequest, response: ConnectionIndexResponse): boolean
+
+  /**
+   * Accept one external browser-session credential for `/api` and index
+   * authentication, and let it own the login redirect for index requests.
+   * @param authenticator - deployment-owned login gate credential.
+   * @returns disposer withdrawing the authenticator.
+   */
+  registerBrowserAuthenticator(authenticator: BrowserSessionAuthenticator): () => void
+
+  /**
+   * Withdraw the process launch token from admission, leaving registered
+   * browser-session authenticators as the only way in. {@link authenticatedUrl}
+   * then stops carrying a token.
+   * @returns disposer re-admitting the launch token.
+   */
+  retireLaunchToken(): () => void
 
   /**
    * Add the fresh process token to an ordinary Web application URL.

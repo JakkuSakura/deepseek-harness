@@ -408,6 +408,15 @@
     - id: timeout-policy
       name: '@deepseek-ai/dsh-tool-call-timeout-policy'
 
+    # Foreground time limit: a tool call that outlives its window moves to a
+    # background job, so the turn keeps going and the result arrives through
+    # `job_output`. Job-control and human-blocking tools are never moved; a
+    # composition narrows the scope further through `include`/`exclude`.
+    - id: tool-call-auto-background
+      name: '@deepseek-ai/dsh-tool-call-auto-background'
+      config:
+        backgroundAfterMs: 5000
+
     - id: spill-local
       name: '@deepseek-ai/dsh-spill-local'
 

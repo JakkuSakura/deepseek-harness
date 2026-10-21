@@ -60,13 +60,13 @@ function phaseLabel(phase: GoalPhase): string {
 function commandHint(goal: GoalView): string {
   if (goal.phase === 'active') {
     return goal.activation === 'armed'
-      ? '/goal edit <objective>, /goal pause, /goal clear'
-      : '/goal edit <objective>, /goal resume, /goal clear'
+      ? '/goal pause, /goal clear'
+      : '/goal resume, /goal clear'
   }
   switch (goal.phase) {
     case 'paused':
     case 'blocked':
-      return '/goal edit <objective>, /goal resume, /goal clear'
+      return '/goal resume, /goal clear'
     case 'complete':
       return '/goal <objective>, /goal clear'
     /* v8 ignore next 2 -- the active branch and every non-active phase are handled above */
@@ -140,17 +140,6 @@ function executeGoalCommand(ctx: Context, invocation: CommandInvocation): Comman
           : renderGoal('Goal', current)
       case 'invalid-edit':
         return { kind: 'error', text: `Goal editing requires a replacement objective.\n${USAGE}` }
-      case 'create': {
-        if (current !== undefined && current.phase !== 'complete') {
-          return {
-            kind: 'error',
-            text: `A goal is already ${phaseLabel(current.phase)}. Use /goal edit <objective> to change it or /goal clear before replacing it.`,
-          }
-        }
-        const created = ctx.goals.create(invocation.agent, { objective: command.objective })
-        submitObjectiveAttachments(invocation)
-        return renderGoal('Goal created', created)
-      }
       case 'edit': {
         if (current === undefined) return missingGoal('edit')
         if (current.phase === 'complete') {
@@ -161,6 +150,22 @@ function executeGoalCommand(ctx: Context, invocation: CommandInvocation): Comman
         const edited = ctx.goals.edit(invocation.agent, goalRef(current), { objective: command.objective })
         submitObjectiveAttachments(invocation)
         return renderGoal('Goal updated', edited)
+      }
+      case 'create': {
+        // An objective always wins. A goal that is still there is cleared and replaced
+        // rather than refused: the refusal made the reader run `/goal clear` first to get
+        // exactly this, and it appeared in the phases where a replacement matters most.
+        // Clearing has no phase guard, where `edit` would keep the old phase and its
+        // spent rounds — a replaced objective would arrive blocked, with no budget.
+        if (current !== undefined && current.phase !== 'complete') {
+          ctx.goals.clear(invocation.agent, goalRef(current))
+          const replaced = ctx.goals.create(invocation.agent, { objective: command.objective })
+          submitObjectiveAttachments(invocation)
+          return renderGoal('Goal replaced', replaced)
+        }
+        const created = ctx.goals.create(invocation.agent, { objective: command.objective })
+        submitObjectiveAttachments(invocation)
+        return renderGoal('Goal created', created)
       }
       case 'pause':
         if (current === undefined) return missingGoal('pause')

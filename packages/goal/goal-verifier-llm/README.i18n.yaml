@@ -1,0 +1,64 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/goal/goal-verifier-llm/README.md
+/:
+  en: 4eff739dca3e46b4
+  zh: d33a0f9acd8c163e
+/deepseek-ai-dsh-goal-verifier-llm:
+  en: d2c4be9577276cc6
+  zh: fe9393564a609a23
+/deepseek-ai-dsh-goal-verifier-llm/summary:
+  en: facbc91514cd93a3
+  zh: 5efc443b07355d5a
+/deepseek-ai-dsh-goal-verifier-llm/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: ffab54373e9e61f0
+/deepseek-ai-dsh-goal-verifier-llm/use-this-package:
+  en: a2668dc707987c6a
+  zh: 7817e2368f0e45c6
+/deepseek-ai-dsh-goal-verifier-llm/use-this-package/what-is-verified:
+  en: bc9f1106b598a20b
+  zh: 9525817f8b7b9446
+/deepseek-ai-dsh-goal-verifier-llm/use-this-package/outcomes:
+  en: 7effb1d4e050f0fb
+  zh: d33e1d41e26ce34f
+/deepseek-ai-dsh-goal-verifier-llm/understand-the-implementation:
+  en: ce7e776e9d516bdb
+  zh: b60777ac29873e8b
+/deepseek-ai-dsh-goal-verifier-llm/understand-the-implementation/design:
+  en: 9c85da12155a911b
+  zh: c202849293cb5f7e
+/deepseek-ai-dsh-goal-verifier-llm/understand-the-implementation/source-map:
+  en: 4935b94dada1c278
+  zh: 261c6c7aedcced15
+/deepseek-ai-dsh-goal-verifier-llm/understand-the-implementation/composition-requirements:
+  en: c8d7ae491bb048d9
+  zh: 471cfa2b251b6e01
+/deepseek-ai-dsh-goal-verifier-llm/further-exploration:
+  en: 9d77e3c95d654cda
+  zh: 6189543811d74030
+/deepseek-ai-dsh-goal-verifier-llm/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-goal-verifier-llm/model-experience/completion-certification-request:
+  en: 81a07093d1180af1
+  zh: 3c78dcd92091c7e8
+/deepseek-ai-dsh-goal-verifier-llm/model-experience/completion-certification-request/what-the-model-sees:
+  en: 9c23a9b35e5dc9be
+  zh: cf9cef88e5a081aa
+/deepseek-ai-dsh-goal-verifier-llm/model-experience/completion-certification-request/what-the-model-sees/verifier-instruction-verbatim:
+  en: eb4877c55ca8844a
+  zh: efbeb534d9ad991f
+/deepseek-ai-dsh-goal-verifier-llm/model-experience/completion-certification-request/token-effect:
+  en: 4aafbc3d26f8efe1
+  zh: 3292a22291ca639a
+/deepseek-ai-dsh-goal-verifier-llm/model-experience/completion-certification-request/kv-cache-effect:
+  en: c74bec6302739c9c
+  zh: 2cce0f4b322e737c
+/deepseek-ai-dsh-goal-verifier-llm/known-limitations-and-deferred-work:
+  en: d66afe6201507544
+  zh: d060ca71de8c2c18
+/deepseek-ai-dsh-goal-verifier-llm/known-limitations-and-deferred-work/dev-note:
+  en: 68c5d6429b683ead
+  zh: 22e9c3de20ae07a3
